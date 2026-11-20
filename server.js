@@ -4,13 +4,48 @@ try { WebSocket = require('ws'); } catch { console.log('\n[HATA] "ws" paketi yok
 const http = require('http'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 
 let cfg = {};
-try { cfg = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8')); } catch {}
+{
+  const CFGFILE = path.join(__dirname, 'config.json');
+  let raw = null;
+  try { raw = fs.readFileSync(CFGFILE, 'utf8'); } catch {}
+  if (raw === null) {
+    if (!process.env.KICK_CLIENT_ID) {
+      console.log('\n[HATA] config.json dosyası bulunamadı (' + CFGFILE + ').');
+      console.log('       config.example.json dosyasını config.json olarak kopyala, içine clientId ve clientSecret yaz.\n');
+      process.exit(1);
+    }
+  } else {
+    raw = raw.replace(/^﻿/, ''); // Not Defteri'nin eklediği BOM işaretini at
+    try { cfg = JSON.parse(raw); }
+    catch (e) {
+      // Hata konumunu satır/sütun olarak bul (içeriği yazdırma: gizli anahtar olabilir)
+      let line = null, col = null;
+      const lc = /line (\d+) column (\d+)/.exec(e.message);
+      const pm = /position (\d+)/.exec(e.message);
+      if (lc) { line = +lc[1]; col = +lc[2]; }
+      else if (pm) { const before = raw.slice(0, +pm[1]).split('\n'); line = before.length; col = before[before.length - 1].length + 1; }
+      console.log('\n[HATA] config.json dosyasında yazım (JSON) hatası var' + (line ? ': satır ' + line + ', sütun ' + col : '') + '.');
+      console.log('       En sık sebepler:');
+      console.log('        - Bir önceki satırın sonunda virgül (,) eksik.');
+      console.log('        - Son satırdan sonra fazladan virgül var (son değerden sonra virgül olmaz).');
+      console.log('        - Tırnak işareti eksik veya düz tırnak (") yerine akıllı tırnak kullanılmış.');
+      console.log('       Doğru örnek:');
+      console.log('         {');
+      console.log('           "clientId": "...",');
+      console.log('           "clientSecret": "...",');
+      console.log('           "port": 3000,');
+      console.log('           "updateUrl": "https://raw.githubusercontent.com/KULLANICI/kick-mod-app/main/"');
+      console.log('         }\n');
+      process.exit(1);
+    }
+  }
+}
 const CLIENT_ID = process.env.KICK_CLIENT_ID || cfg.clientId;
 const CLIENT_SECRET = process.env.KICK_CLIENT_SECRET || cfg.clientSecret;
 const PORT = Number(cfg.port || 3000);
-if (!CLIENT_ID || !CLIENT_SECRET || CLIENT_ID.includes('BURAYA')) {
-  console.log('\n[HATA] config.json eksik. config.example.json dosyasını config.json olarak kopyala,');
-  console.log('       içine Kick geliştirici panelinden aldığın clientId ve clientSecret değerlerini yaz.\n');
+if (!CLIENT_ID || !CLIENT_SECRET || String(CLIENT_ID).includes('BURAYA')) {
+  console.log('\n[HATA] config.json içinde clientId veya clientSecret boş ya da hâlâ örnek değerde.');
+  console.log('       Kick geliştirici panelinden aldığın clientId ve clientSecret değerlerini yaz.\n');
   process.exit(1);
 }
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -116,34 +151,96 @@ async function applyUpdate() {
 }
 
 // ---- Kick chat (Pusher) bağlantısı: sunucu tarafında, panele SSE ile aktarılır ----
-const PUSHER_URL = 'wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0&flash=false';
-const streams = new Map(); // room -> { ws, clients:Set, closed }
+// Kick, Pusher anahtarını artık sabit tutmuyor; anahtar + cluster her bağlantıda Kick'in "realtime" servisinden alınır.
+// Sıra: config.json'daki elle ayar (pusherKey/pusherCluster) > son çalışan anahtar (önbellek) > Kick'ten otomatik > eski sabit anahtar.
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';
+const LEGACY_PUSHER = { appKey: '32cbd69e4b950bf97679', cluster: 'us2', source: 'eski sabit anahtar' };
+const RT_BASES = ['https://web.kick.com/api', 'https://kick.com/api'];
+const CLIENT_UUID = crypto.randomUUID();
+let pusherCache = null;              // { appKey, cluster, source }
+const channelIds = new Map();        // slug -> Kick kanal ID
+
+// Kick cevabının içinde { provider:'pusher', credentials:{ app_key, cluster } } nerede olursa bul
+function findPusher(o, depth = 0) {
+  if (!o || typeof o !== 'object' || depth > 6) return null;
+  if (o.provider === 'pusher' && o.credentials && o.credentials.app_key && o.credentials.cluster)
+    return { appKey: String(o.credentials.app_key), cluster: String(o.credentials.cluster) };
+  for (const v of Array.isArray(o) ? o : Object.values(o)) { const r = findPusher(v, depth + 1); if (r) return r; }
+  return null;
+}
+async function kickChannelId(slug) {
+  if (!slug) return null;
+  if (channelIds.has(slug)) return channelIds.get(slug);
+  try {
+    const r = await fetch('https://kick.com/api/v2/channels/' + encodeURIComponent(slug), { headers: { 'User-Agent': UA, Accept: 'application/json' } });
+    const j = await r.json(); if (j && j.id) { channelIds.set(slug, j.id); return j.id; }
+  } catch {}
+  return null;
+}
+async function negotiatePusher(info) {
+  const body = JSON.stringify({ client: { id: CLIENT_UUID, type: 'web' }, capabilities: { accepted_providers: [{ provider: 'pusher' }] } });
+  const ids = [...new Set([await kickChannelId(info.slug), info.bid].filter(Boolean))];
+  const paths = [...ids.map(id => `/v1/realtime/channels/${id}/chat/connection`), '/v1/realtime/connection'];
+  const tried = [];
+  for (const p of paths) for (const b of RT_BASES) {
+    try {
+      const r = await fetch(b + p, { method: 'POST', headers: { 'User-Agent': UA, Accept: 'application/json', 'Content-Type': 'application/json', Origin: 'https://kick.com', Referer: 'https://kick.com/' }, body, signal: AbortSignal.timeout(8000) });
+      const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch {}
+      const found = j && findPusher(j);
+      if (found) return { ...found, source: 'Kick otomatik' };
+      tried.push(r.status + (j && /centrifugo/.test(txt) ? ' (sadece centrifugo)' : ''));
+    } catch (e) { tried.push('hata'); }
+  }
+  throw new Error('Kick anahtarı vermedi [' + tried.join(', ') + ']');
+}
+async function getPusher(st, force) {
+  if (cfg.pusherKey && cfg.pusherCluster) return { appKey: cfg.pusherKey, cluster: cfg.pusherCluster, source: 'config.json' };
+  if (pusherCache && !force) return pusherCache;
+  try { pusherCache = await negotiatePusher(st.info); }
+  catch (e) { emit(st, { status: 'Otomatik anahtar alınamadı: ' + e.message + '. Eski anahtar deneniyor.' }); pusherCache = null; return LEGACY_PUSHER; }
+  console.log('[sohbet] Pusher anahtarı alındı (' + pusherCache.cluster + ')');
+  return pusherCache;
+}
+
+const streams = new Map(); // room -> { ws, clients:Set, closed, info, fails, refresh }
 function emit(st, obj) { const line = 'data: ' + JSON.stringify(obj) + '\n\n'; for (const c of st.clients) c.write(line); }
-function openUpstream(room) {
+async function openUpstream(room) {
   const st = streams.get(room); if (!st || st.closed) return;
-  const ws = new WebSocket(PUSHER_URL);
+  st.ws = 'bekliyor';
+  const pc = await getPusher(st, st.refresh); st.refresh = false;
+  if (st.closed) return;
+  const ws = new WebSocket(`wss://ws-${pc.cluster}.pusher.com/app/${pc.appKey}?protocol=7&client=js&version=8.4.0&flash=false`);
   st.ws = ws;
-  ws.on('open', () => emit(st, { status: 'Kick sohbet sunucusuna bağlanıldı, kanala abone olunuyor…' }));
+  ws.on('open', () => emit(st, { status: 'Kick sohbet sunucusuna bağlanıldı (' + pc.source + '), kanala abone olunuyor…' }));
   ws.on('message', buf => {
     let m; try { m = JSON.parse(buf.toString()); } catch { return; }
     if (m.event === 'pusher:connection_established') ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: 'chatrooms.' + room + '.v2' } }));
     else if (m.event === 'pusher:ping') ws.send(JSON.stringify({ event: 'pusher:pong', data: {} }));
-    else if (m.event === 'pusher_internal:subscription_succeeded') emit(st, { ready: true });
-    else if (m.event === 'pusher:error') emit(st, { status: 'Kick hata verdi: ' + (typeof m.data === 'string' ? m.data : JSON.stringify(m.data)) });
+    else if (m.event === 'pusher_internal:subscription_succeeded') { st.fails = 0; emit(st, { ready: true, status: 'Sohbet akışı hazır ✔' }); }
+    else if (m.event === 'pusher:error') {
+      const d = typeof m.data === 'string' ? (() => { try { return JSON.parse(m.data); } catch { return { message: m.data }; } })() : (m.data || {});
+      // 4001 = anahtar/cluster geçersiz, 4003 = uygulama kapalı → bir sonraki denemede anahtarı Kick'ten yeniden al
+      if (d.code >= 4000 && d.code < 4100) { st.refresh = true; if (pc.source !== 'config.json') pusherCache = null; }
+      emit(st, { status: 'Kick hata verdi: ' + (d.message || JSON.stringify(d)) });
+    }
     else if (m.event && !m.event.startsWith('pusher')) emit(st, { pusher: m });
   });
   ws.on('unexpected-response', (rq, rs) => emit(st, { status: 'Kick bağlantıyı reddetti (HTTP ' + rs.statusCode + ')', down: true }));
   ws.on('error', e => emit(st, { status: 'Bağlantı hatası: ' + e.message }));
-  ws.on('close', (code, reason) => {
-    emit(st, { status: 'Bağlantı koptu (kod ' + code + (reason && reason.length ? ', ' + reason.toString() : '') + '), 3 sn sonra tekrar denenecek…', down: true });
-    if (!st.closed) setTimeout(() => openUpstream(room), 3000);
+  ws.on('close', code => {
+    if (st.closed) return;
+    st.fails = (st.fails || 0) + 1;
+    const wait = Math.min(60, 3 * 2 ** Math.min(st.fails - 1, 5)); // 3, 6, 12, 24, 48, 60 sn
+    emit(st, { status: 'Bağlantı koptu (kod ' + code + '), ' + wait + ' sn sonra tekrar denenecek…', down: true });
+    setTimeout(() => openUpstream(room), wait * 1000);
   });
 }
-function attach(room, res) {
+function attach(room, res, info) {
   let st = streams.get(room);
-  if (!st) { st = { clients: new Set(), closed: false }; streams.set(room, st); }
+  if (!st) { st = { clients: new Set(), closed: false, info, fails: 0 }; streams.set(room, st); }
+  if (info.slug) st.info = info;
   st.clients.add(res);
-  if (!st.ws) openUpstream(room); else emit(st, { status: 'Panel yeniden bağlandı.' });
+  if (!st.ws) openUpstream(room).catch(e => emit(st, { status: 'Sohbet hatası: ' + e.message })); else emit(st, { status: 'Panel yeniden bağlandı.' });
   const ka = setInterval(() => res.write(': ka\n\n'), 20000);
   res.on('close', () => {
     clearInterval(ka); st.clients.delete(res);
@@ -191,7 +288,8 @@ const server = http.createServer(async (req, res) => {
       if (!/^\d{1,12}$/.test(room)) { res.writeHead(400); return res.end('room?'); }
       res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
       res.write('retry: 3000\n\n');
-      return attach(room, res);
+      const slug = (url.searchParams.get('slug') || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      return attach(room, res, { slug, bid: num(url.searchParams.get('bid')) });
     }
 
     if (url.pathname === '/api/logout') { tokens = null; try { fs.unlinkSync(TOKFILE); } catch {} return send(res, 200, { ok: true }); }
@@ -222,6 +320,7 @@ const server = http.createServer(async (req, res) => {
       const r = await fetch('https://kick.com/api/v2/channels/' + encodeURIComponent(slug), { headers: { 'User-Agent': 'Mozilla/5.0', Accept: 'application/json' } });
       const j = await r.json().catch(() => null);
       if (!r.ok || !j || !j.chatroom) return send(res, 502, { error: 'Otomatik bulunamadı' });
+      if (j.id) channelIds.set(slug, j.id);
       return send(res, 200, { chatroom_id: j.chatroom.id });
     }
 

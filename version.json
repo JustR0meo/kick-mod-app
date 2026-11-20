@@ -1,0 +1,10 @@
+{
+  "version": "1.2.0",
+  "files": [
+    "server.js",
+    "public/index.html",
+    "package.json",
+    "version.json"
+  ],
+  "notes": "Sohbet: Kick'in değişen Pusher anahtarı artık otomatik alınıyor, kopmalarda artan bekleme. config.json hata mesajları netleşti."
+}

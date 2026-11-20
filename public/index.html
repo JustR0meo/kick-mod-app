@@ -180,7 +180,7 @@ async function connect(){
   if(!/^\d+$/.test(room)){toast('Geçerli bir Chatroom ID gir');return}
   store.set('slug',slug);store.set('room',room);
   if(ws)ws.close();
-  ws=new EventSource('/api/stream?room='+room);
+  ws=new EventSource('/api/stream?room='+room+'&slug='+encodeURIComponent(slug)+(bid?'&bid='+bid:''));
   ws.onmessage=e=>{let x;try{x=JSON.parse(e.data)}catch(err){return}
     if(x.status){sys(x.status);if(x.down)$('dot').classList.remove('on');return}
     if(x.ready){$('dot').classList.add('on');sys('Bağlandı: chatrooms.'+room+'.v2 ✔');return}
