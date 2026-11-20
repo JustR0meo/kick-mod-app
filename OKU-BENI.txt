@@ -14,7 +14,12 @@ KICK MOD PANELİ
 PANEL KULLANIMI
 - Panellerin başlığından tutup sürükle, sağ alt köşeden boyutlandır. Düzen otomatik kaydedilir.
 - Sağ üstte "Paneller" ile panelleri aç/kapat, "Düzeni sıfırla" ile varsayılana dön.
-- Mesajların sağındaki 🗑 / 1dk / 10dk / 🔨 butonları silme, timeout ve ban yapar.
+- İsimlerin solundaki 🗑 mesajı siler, ⏱ 10 dakika timeout atar, 🔨 kalıcı ban atar.
+  (Ban öncesi onay sorusunu "Kanal eylemleri" panelinden kapatabilirsin.)
+- Rozetler simge olarak görünür; üzerine gelince adı yazar.
+- Kullanıcı adına tıkla: istatistik kartı açılır (mesaj, timeout, ban, takip/abonelik, notlar, farklı süreli timeout).
+- Alt tuşunu basılı tut: sohbet durur, bırakınca bekleyen mesajlar gelir. Kalıcı duraklatma için "Duraklat" kutusu.
+- "Paneller" menüsünden "Yayın izle" panelini açarak yayını panel içinde izleyebilirsin.
 
 OTOMATİK GÜNCELLEME (bir kere kurulum)
 Uygulama güncellemeyi senin belirlediğin bir internet adresinden çeker. Ücretsiz yol GitHub:

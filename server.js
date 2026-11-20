@@ -324,6 +324,16 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { chatroom_id: j.chatroom.id });
     }
 
+    // Kullanıcı kartı için: takip tarihi, abonelik ayı, ban durumu (Kick'in site API'si, en iyi çaba)
+    if (url.pathname === '/api/userinfo') {
+      const slug = (url.searchParams.get('slug') || '').trim().toLowerCase(), u = (url.searchParams.get('u') || '').trim().toLowerCase();
+      if (!/^[a-z0-9_-]{1,40}$/.test(slug) || !/^[a-z0-9_.-]{1,40}$/.test(u)) return send(res, 400, { error: 'Eksik bilgi' });
+      const r = await fetch(`https://kick.com/api/v2/channels/${slug}/users/${u}`, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j) return send(res, 502, { error: 'Kick bilgi vermedi' });
+      return send(res, 200, { following_since: j.following_since || null, subscribed_for: j.subscribed_for || 0, banned: j.banned || null, created_at: (j.user && j.user.created_at) || j.created_at || null });
+    }
+
     if (url.pathname === '/api/ban' && req.method === 'POST') {
       const b = await readBody(req);
       const body = { broadcaster_user_id: num(b.broadcaster_user_id), user_id: num(b.user_id) };
