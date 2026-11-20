@@ -159,6 +159,7 @@ const RT_BASES = ['https://web.kick.com/api', 'https://kick.com/api'];
 const CLIENT_UUID = crypto.randomUUID();
 let pusherCache = null;              // { appKey, cluster, source }
 const channelIds = new Map();        // slug -> Kick kanal ID
+const emoteCache = new Map();        // slug -> { t, data }
 
 // Kick cevabının içinde { provider:'pusher', credentials:{ app_key, cluster } } nerede olursa bul
 function findPusher(o, depth = 0) {
@@ -322,6 +323,25 @@ const server = http.createServer(async (req, res) => {
       if (!r.ok || !j || !j.chatroom) return send(res, 502, { error: 'Otomatik bulunamadı' });
       if (j.id) channelIds.set(slug, j.id);
       return send(res, 200, { chatroom_id: j.chatroom.id });
+    }
+
+    // Emote listesi (kanal + Kick genel + emoji setleri); 10 dk önbellek
+    if (url.pathname === '/api/emotes') {
+      const slug = (url.searchParams.get('slug') || '').trim().toLowerCase();
+      if (!/^[a-z0-9_-]{1,40}$/.test(slug)) return send(res, 400, { error: 'Kanal adı yok' });
+      const c = emoteCache.get(slug);
+      if (c && Date.now() - c.t < 600000) return send(res, 200, c.data);
+      const r = await fetch('https://kick.com/emotes/' + slug, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !Array.isArray(j)) return send(res, 502, { error: 'Kick emote listesi vermedi' });
+      const sets = j.map(s => ({
+        title: s.user_id ? (s.slug || slug) : (s.name || s.id || 'Kick'),
+        channel: !!s.user_id,
+        emotes: (s.emotes || []).filter(e => e && e.id && e.name).map(e => ({ id: e.id, name: e.name, sub: !!e.subscribers_only })),
+      })).filter(s => s.emotes.length);
+      const data = { sets };
+      emoteCache.set(slug, { t: Date.now(), data });
+      return send(res, 200, data);
     }
 
     // Kullanıcı kartı için: takip tarihi, abonelik ayı, ban durumu (Kick'in site API'si, en iyi çaba)

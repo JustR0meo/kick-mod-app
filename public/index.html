@@ -57,6 +57,17 @@ label.c{color:var(--m);display:flex;gap:4px;align-items:center;font-size:13px}
 .ugrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px}.ugrid .stat{padding:6px}.ugrid .stat b{font-size:15px}
 .kv{font-size:12px;color:var(--m);margin-bottom:8px}.kv div{display:flex;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px dashed var(--b)}.kv div b{color:var(--t);font-weight:600}
 body.drag iframe{pointer-events:none}
+img.em{height:26px;vertical-align:middle;margin:-4px 1px}
+.composer{display:flex;gap:6px;padding:6px 8px;border-top:1px solid var(--b);position:relative;align-items:center}
+.composer input{flex:1;min-width:60px}#emb{font-size:16px;padding:3px 8px}
+#cnt{font-size:11px;color:var(--m);min-width:34px;text-align:right}
+#empick{position:absolute;bottom:100%;left:8px;right:8px;max-width:420px;height:300px;background:var(--p);border:1px solid var(--b);border-radius:10px;box-shadow:0 -8px 24px #000a;display:none;flex-direction:column;z-index:5}
+#empick.on{display:flex}
+.etabs{display:flex;gap:4px;padding:6px;border-bottom:1px solid var(--b);flex-wrap:wrap}.etabs b{font-size:12px;font-weight:600;padding:3px 8px;border-radius:12px;background:var(--p2);cursor:pointer;border:1px solid var(--b)}.etabs b.on{border-color:var(--g);color:var(--g)}
+#emq{margin:6px;width:calc(100% - 12px)}
+#emgrid{flex:1;overflow-y:auto;padding:4px 6px;display:grid;grid-template-columns:repeat(auto-fill,minmax(38px,1fr));gap:2px;align-content:start}
+#emgrid span{height:38px;display:flex;align-items:center;justify-content:center;border-radius:6px;cursor:pointer;font-size:22px}#emgrid span:hover{background:var(--p2)}
+#emgrid img{max-height:30px;max-width:34px}#emgrid .lock{opacity:.45}
 #pwrap iframe{width:100%;height:100%;border:0;display:block}
 .erow{padding:5px 8px;border-radius:6px;margin-bottom:5px;background:var(--p2);border-left:3px solid var(--m);font-size:13px}
 .erow.ban{border-color:var(--r)}.erow.del{border-color:var(--o)}.erow.sub{border-color:var(--g)}.erow.gift{border-color:var(--pk)}.erow.rew{border-color:var(--bl)}.erow.unban{border-color:var(--y)}
@@ -113,7 +124,9 @@ async function api(p,body){
 
 /* ================= PANELLER ================= */
 const P=[
-['chat','💬 Sohbet',{x:8,y:8,w:620,h:660},`<div class="pb col"><div class="tools"><input type="text" id="search" placeholder="Mesaj veya kullanıcı ara…"><label class="c"><input type="checkbox" id="onlyflag"> İşaretli</label><label class="c" title="Alt tuşunu basılı tuttuğun sürece de duraklar"><input type="checkbox" id="pause"> Duraklat (Alt)</label><button id="clear">Temizle</button></div><div id="feed"></div><div id="pbar"></div></div>`],
+['chat','💬 Sohbet',{x:8,y:8,w:620,h:660},`<div class="pb col"><div class="tools"><input type="text" id="search" placeholder="Mesaj veya kullanıcı ara…"><label class="c"><input type="checkbox" id="onlyflag"> İşaretli</label><label class="c" title="Alt tuşunu basılı tuttuğun sürece de duraklar"><input type="checkbox" id="pause"> Duraklat (Alt)</label><button id="clear">Temizle</button></div><div id="feed"></div><div id="pbar"></div>
+ <div class="composer"><div id="empick"><div class="etabs" id="etabs"></div><input type="text" id="emq" placeholder="Emote / emoji ara…"><div id="emgrid"></div></div>
+ <button id="emb" title="Emote ve emoji">😀</button><input type="text" id="msgin" maxlength="500" placeholder="Mesaj yaz… (Enter ile gönder)"><span id="cnt"></span><button class="pri" id="send">Gönder</button></div></div>`],
 ['player','🎬 Yayın izle',{x:1302,y:8,w:540,h:350},`<div class="pb col"><div class="tools"><label class="c"><input type="checkbox" id="pmute"> Sessiz başlat</label><button id="pload">Yükle / yenile</button><button id="pstop">Durdur</button><span class="small" id="pinfo"></span></div><div id="pwrap" style="flex:1;background:#000;min-height:0;display:flex;align-items:center;justify-content:center"><span class="small">Kanala bağlanınca yayın burada açılır.</span></div></div>`],
 ['events','📣 Etkinlik akışı',{x:636,y:8,w:340,h:320},`<div class="pb" id="evlog"><div class="small">Ban, timeout, silinen mesaj, abonelik, hediye ve ödül olayları burada canlı akar.</div></div>`],
 ['stream','📺 Yayın bilgisi',{x:984,y:8,w:310,h:320},`<div class="pb" id="streambox"></div>`],
@@ -198,6 +211,7 @@ async function connect(){
   if(!/^\d+$/.test(room)){toast('Geçerli bir Chatroom ID gir');return}
   store.set('slug',slug);store.set('room',room);
   if($('pn-player').style.display!=='none')loadPlayer();
+  loadEmotes();
   if(ws)ws.close();
   ws=new EventSource('/api/stream?room='+room+'&slug='+encodeURIComponent(slug)+(bid?'&bid='+bid:''));
   ws.onmessage=e=>{let x;try{x=JSON.parse(e.data)}catch(err){return}
@@ -278,7 +292,7 @@ function onMsg(d){
   const mk=Math.floor(Date.now()/60000);mins[mk]=(mins[mk]||0)+1;
   const hard=reasons.some(r=>r[1]),isMod=u.badges.includes('moderator')||u.badges.includes('broadcaster'),isVip=u.badges.includes('vip');
   let cls='';if(isMod)cls=' mod';else if(hard)cls=' alert';else if(isVip)cls=' vip';else if(reasons.length)cls=' flag';
-  const txt=esc(d.content||'').replace(/\[emote:\d+:([^\]]+)\]/g,'<span class="small">:$1:</span>');
+  const txt=rich(d.content||'');
   // isimden önce: sil / 10 dk timeout / kalıcı ban
   const acts=isMod?'':'<span class="act" data-id="'+esc(d.id||'')+'" data-u="'+esc(name)+'"><b data-a="del" title="Mesajı sil">🗑</b><b data-a="t10" title="10 dakika timeout">⏱</b><b data-a="ban" title="Kalıcı ban">🔨</b></span>';
   const el=addEl('<div class="msg'+cls+'" data-flag="'+(reasons.length?1:0)+'" data-u="'+esc(name)+'"><span class="ts" title="'+full(d.created_at)+'">'+hm(d.created_at)+'</span>'+acts+badgeHtml(u.bdg)+'<span class="u" style="color:'+esc(u.color)+'" data-u="'+esc(name)+'">'+esc(name)+'</span>: <span class="tx">'+txt+'</span>'+reasons.map(r=>'<span class="why'+(r[1]?' r':'')+'">'+r[0]+'</span>').join('')+'</div>');
@@ -403,7 +417,7 @@ function refreshPop(n){
   $('pStats').innerHTML='<div class="ugrid">'+st(u.count,'mesaj')+st(u.flags||0,'işaretli')+st(u.deleted||0,'silinen')+st(u.timeouts||0,'timeout')+st(u.bans||0,'ban')+st(u.msgs.filter(m=>Date.now()-m.t<300000).length,'son 5 dk')+'</div>'+
    '<div class="kv"><div><span>İlk görülme</span><b>'+hm(u.first)+'</b></div><div><span>Son mesaj</span><b>'+(u.msgs.length?ago(u.msgs[u.msgs.length-1].t):'—')+'</b></div>'+
    '<div><span>Rozetler</span><b>'+(u.bdg.length?esc(u.bdg.map(b=>(BI[b.type]||[0,b.type])[1]).join(', ')):'yok')+'</b></div></div>';
-  $('pHist').innerHTML=u.msgs.slice(-15).reverse().map(m=>'<div>'+hm(m.t)+' '+esc(m.txt)+(m.flag.length?' <span class="why">'+m.flag.join(', ')+'</span>':'')+'</div>').join('');
+  $('pHist').innerHTML=u.msgs.slice(-15).reverse().map(m=>'<div>'+hm(m.t)+' '+rich(m.txt||'')+(m.flag.length?' <span class="why">'+m.flag.join(', ')+'</span>':'')+'</div>').join('');
 }
 async function loadKickUser(n){
   const slug=$('slug').value.trim();const box=()=>popU===n&&$('pKick');
@@ -417,6 +431,75 @@ async function loadKickUser(n){
 function closePop(){$('upop').classList.remove('on');popU=null}
 document.addEventListener('pointerdown',e=>{if(popU&&!e.target.closest('#upop')&&!e.target.classList.contains('u'))closePop()});
 addEventListener('keydown',e=>{if(e.key==='Escape')closePop()});
+
+/* ================= EMOTE + MESAJ YAZMA ================= */
+const EMO_URL=id=>'https://files.kick.com/emotes/'+encodeURIComponent(id)+'/fullsize';
+const seenEm=new Map();          // sohbette görülen emote'lar: ad -> id
+let emSets=[],emByName=new Map(),emTab=store.get('emTab','Görülenler'),recentEm=store.get('recentEm',[]);
+// Mesaj metnini güvenli hale getirip [emote:ID:ad] kodlarını resme çevirir
+function rich(s){
+  return esc(s).replace(/\[emote:(\d+):([^\]]{1,40})\]/g,(m,id,n)=>{if(!seenEm.has(n)){seenEm.set(n,id);if(emTab==='Görülenler'&&$('empick').classList.contains('on'))renderEm()}
+    return '<img class="em" src="'+EMO_URL(id)+'" alt=":'+n+':" title="'+n+'" loading="lazy" onerror="this.replaceWith(document.createTextNode(\':'+n.replace(/[^\w-]/g,'')+':\'))">'});
+}
+const UNI=('😀 😂 🤣 😅 😊 😍 😘 😎 🤔 😐 🙄 😏 😴 😭 😡 🤬 😱 🥶 🥵 🤯 🥳 🤡 💀 👻 👽 🤖 💩 😈 '+
+ '👍 👎 👏 🙌 🙏 💪 🤝 ✌️ 🤞 👌 🤙 👋 ✋ 🫡 👀 🧠 '+
+ '❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 💯 🔥 ⭐ ✨ ⚡ 💥 🎉 🎊 🎁 🏆 🥇 👑 💎 💰 💸 '+
+ '⚽ 🏀 🎮 🎯 🎲 🎵 🎶 📢 🚨 ⛔ 🚫 ✅ ❌ ⚠️ ❓ ❗ 🔨 ⏱ 🗑 🍕 🍔 🍿 ☕ 🍺 🇹🇷').split(' ');
+async function loadEmotes(){
+  const slug=$('slug').value.trim().toLowerCase();if(!slug)return;
+  try{const j=await api('/api/emotes?slug='+encodeURIComponent(slug));emSets=j.sets||[];
+    emByName=new Map();emSets.forEach(s=>s.emotes.forEach(e=>{if(!emByName.has(e.name))emByName.set(e.name,e.id)}));
+    if(emTab==='Görülenler'&&emSets.length&&!seenEm.size)emTab=emSets[0].title;
+  }catch(e){emSets=[]}
+  renderEm();
+}
+function emTabs(){return ['Son kullanılan','Görülenler',...emSets.map(s=>s.title),'Emoji']}
+function renderEm(){
+  const tabs=emTabs();if(!tabs.includes(emTab))emTab='Görülenler';
+  $('etabs').innerHTML=tabs.map(t=>'<b class="'+(t===emTab?'on':'')+'" data-t="'+esc(t)+'">'+esc(t)+'</b>').join('');
+  const q=$('emq').value.trim().toLowerCase();let items;
+  if(q){items=[...emByName].concat([...seenEm]).filter(([n])=>n.toLowerCase().includes(q)).map(([n,id])=>({n,id}));
+    const seen=new Set();items=items.filter(i=>!seen.has(i.n)&&seen.add(i.n));}
+  else if(emTab==='Emoji')items=UNI.map(u=>({u}));
+  else if(emTab==='Son kullanılan')items=recentEm;
+  else if(emTab==='Görülenler')items=[...seenEm].reverse().map(([n,id])=>({n,id}));
+  else{const s=emSets.find(s=>s.title===emTab);items=s?s.emotes.map(e=>({n:e.name,id:e.id,sub:e.sub})):[]}
+  $('emgrid').innerHTML=items.length?items.slice(0,400).map(i=>i.u?'<span data-u="'+i.u+'" title="'+i.u+'">'+i.u+'</span>':
+    '<span data-n="'+esc(i.n)+'" data-id="'+esc(i.id)+'" title="'+esc(i.n)+(i.sub?' (abonelere özel)':'')+'"'+(i.sub?' class="lock"':'')+'><img src="'+EMO_URL(i.id)+'" loading="lazy" alt="'+esc(i.n)+'"></span>').join('')
+    :'<div class="small" style="grid-column:1/-1;padding:10px">'+(emTab==='Görülenler'?'Sohbette emote görüldükçe burada birikir.':emTab==='Son kullanılan'?'Henüz emote kullanmadın.':'Bulunamadı.')+'</div>';
+}
+$('etabs').onclick=e=>{const t=e.target.dataset.t;if(t){emTab=t;store.set('emTab',t);$('emq').value='';renderEm()}};
+$('emq').oninput=renderEm;
+$('emb').onclick=e=>{e.stopPropagation();const p=$('empick');p.classList.toggle('on');if(p.classList.contains('on')){renderEm();if(!emSets.length)loadEmotes();$('emq').focus()}};
+document.addEventListener('pointerdown',e=>{if(!e.target.closest('#empick')&&e.target.id!=='emb')$('empick').classList.remove('on')});
+function insertAtCursor(t){const i=$('msgin'),a=i.selectionStart??i.value.length,b=i.selectionEnd??a;
+  const pre=i.value.slice(0,a),ins=(pre&&!/\s$/.test(pre)?' ':'')+t+' ';i.value=(pre+ins+i.value.slice(b)).slice(0,500);
+  const p=Math.min(500,a+ins.length);i.focus();i.setSelectionRange(p,p);updCnt()}
+$('emgrid').onclick=e=>{const s=e.target.closest('span');if(!s)return;
+  if(s.dataset.u){insertAtCursor(s.dataset.u);return}
+  const n=s.dataset.n,id=s.dataset.id;emByName.set(n,id);insertAtCursor(':'+n+':');
+  recentEm=[{n,id},...recentEm.filter(r=>r.n!==n)].slice(0,40);store.set('recentEm',recentEm);
+  if(!e.shiftKey)$('empick').classList.remove('on')};
+// Gönderirken :ad: yazılarını Kick'in emote koduna çevir
+const toKick=t=>t.replace(/:([\w-]{2,40}):/g,(m,n)=>{const id=emByName.get(n)||seenEm.get(n);return id?'[emote:'+id+':'+n+']':m});
+function updCnt(){const l=$('msgin').value.length;$('cnt').textContent=l>400?(500-l):''}
+const sentHist=[];let histI=-1;
+async function sendMsg(){
+  const i=$('msgin'),raw=i.value.trim();if(!raw)return;
+  if(!(auth&&bid)){toast('Mesaj yazmak için giriş yap ve kanala bağlan');return}
+  const content=toKick(raw);if(content.length>500){toast('Mesaj çok uzun (en fazla 500)');return}
+  $('send').disabled=true;
+  try{await api('/api/chat',{broadcaster_user_id:bid,content});sentHist.unshift(raw);sentHist.length=Math.min(sentHist.length,30);histI=-1;i.value='';updCnt()}
+  catch(e){toast('Gönderilemedi: '+e.message)}
+  finally{$('send').disabled=false;i.focus()}
+}
+$('send').onclick=sendMsg;$('msgin').oninput=updCnt;
+$('msgin').onkeydown=e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMsg()}
+  else if(e.key==='ArrowUp'&&sentHist.length&&!$('msgin').value.slice(0,$('msgin').selectionStart).includes('\n')){if(histI<sentHist.length-1){histI++;$('msgin').value=sentHist[histI];e.preventDefault()}}
+  else if(e.key==='ArrowDown'&&histI>=0){histI--;$('msgin').value=histI>=0?sentHist[histI]:'';e.preventDefault()}
+  else if(e.key==='Escape')$('empick').classList.remove('on');
+};
 
 /* ================= YAYIN İZLE ================= */
 function loadPlayer(){
