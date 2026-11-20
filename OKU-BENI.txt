@@ -20,6 +20,8 @@ PANEL KULLANIMI
 - Kullanıcı adına tıkla: istatistik kartı açılır (mesaj, timeout, ban, takip/abonelik, notlar, farklı süreli timeout).
 - Alt tuşunu basılı tut: sohbet durur, bırakınca bekleyen mesajlar gelir. Kalıcı duraklatma için "Duraklat" kutusu.
 - Sohbetin altındaki kutudan mesaj yaz (Enter gönderir, ↑ son mesajı getirir). 😀 butonu emote/emoji seçer; :emoteadi: yazmak da çalışır.
+- Etkinlik akışı: üstten kanal seç, geçmiş kayıtlar panel kapansa da saklanır. Türe göre filtrele, ara, ⭳ ile Excel (CSV) indir.
+- Yasaklı kelimeler mesaj içinde kırmızı işaretlenir ve etkinlik akışına "Yasaklı kelime" olarak düşer.
 - "Paneller" menüsünden "Yayın izle" panelini açarak yayını panel içinde izleyebilirsin.
 
 OTOMATİK GÜNCELLEME (bir kere kurulum)

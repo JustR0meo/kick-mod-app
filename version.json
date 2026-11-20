@@ -1,10 +1,10 @@
 {
-  "version": "1.4.0",
+  "version": "1.5.0",
   "files": [
     "server.js",
     "public/index.html",
     "package.json",
     "version.json"
   ],
-  "notes": "Sohbetten mesaj yazma, emote ve emoji seçici; sohbette emote resimleri görünüyor."
+  "notes": "Etkinlik akışı yenilendi: kanallara göre ayrı, kalıcı geçmiş, gün başlıkları, tür filtreleri, arama, CSV indirme. Yasaklı kelimeler mesajda işaretleniyor ve akışa düşüyor."
 }

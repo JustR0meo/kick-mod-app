@@ -70,6 +70,13 @@ img.em{height:26px;vertical-align:middle;margin:-4px 1px}
 #emgrid img{max-height:30px;max-width:34px}#emgrid .lock{opacity:.45}
 #pwrap iframe{width:100%;height:100%;border:0;display:block}
 .erow{padding:5px 8px;border-radius:6px;margin-bottom:5px;background:var(--p2);border-left:3px solid var(--m);font-size:13px}
+.erow.word{border-color:#ff4d4d;background:#ff4d4d14}
+.eday{position:sticky;top:-6px;background:var(--p);color:var(--m);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:6px 2px 4px;z-index:1}
+.eic{display:inline-block;width:18px;text-align:center}.eu{font-weight:700}
+.edt{color:var(--m);font-size:12px;margin:2px 0 0 26px;word-break:break-word}
+.eby{display:inline-block;font-size:11px;background:#ff4d4d33;color:#ffb3b3;border-radius:4px;padding:0 5px;margin:2px 0 0 26px}.eby.unk{background:var(--b);color:var(--m)}
+#evf .tag{font-size:11px;padding:1px 7px}
+mark.bw{background:var(--r);color:#fff;border-radius:3px;padding:0 2px;font-weight:700}
 .erow.ban{border-color:var(--r)}.erow.del{border-color:var(--o)}.erow.sub{border-color:var(--g)}.erow.gift{border-color:var(--pk)}.erow.rew{border-color:var(--bl)}.erow.unban{border-color:var(--y)}
 .btns{display:flex;gap:6px;flex-wrap:wrap}.btns button{flex:1;min-width:52px;padding:5px 4px;font-size:13px}
 .tm:hover{border-color:var(--y);color:var(--y)}
@@ -128,7 +135,11 @@ const P=[
  <div class="composer"><div id="empick"><div class="etabs" id="etabs"></div><input type="text" id="emq" placeholder="Emote / emoji ara…"><div id="emgrid"></div></div>
  <button id="emb" title="Emote ve emoji">😀</button><input type="text" id="msgin" maxlength="500" placeholder="Mesaj yaz… (Enter ile gönder)"><span id="cnt"></span><button class="pri" id="send">Gönder</button></div></div>`],
 ['player','🎬 Yayın izle',{x:1302,y:8,w:540,h:350},`<div class="pb col"><div class="tools"><label class="c"><input type="checkbox" id="pmute"> Sessiz başlat</label><button id="pload">Yükle / yenile</button><button id="pstop">Durdur</button><span class="small" id="pinfo"></span></div><div id="pwrap" style="flex:1;background:#000;min-height:0;display:flex;align-items:center;justify-content:center"><span class="small">Kanala bağlanınca yayın burada açılır.</span></div></div>`],
-['events','📣 Etkinlik akışı',{x:636,y:8,w:340,h:320},`<div class="pb" id="evlog"><div class="small">Ban, timeout, silinen mesaj, abonelik, hediye ve ödül olayları burada canlı akar.</div></div>`],
+['events','📣 Etkinlik akışı',{x:636,y:8,w:340,h:320},`<div class="pb col">
+ <div class="tools"><select id="evch" title="Kanal" style="flex:1;min-width:90px"></select><input type="text" id="evq" placeholder="Kullanıcı / mod / mesaj ara"><button id="evexp" title="Excel (CSV) olarak indir">⭳</button><button id="evclr" title="Bu kanalın geçmişini sil">🗑</button></div>
+ <div id="evf" style="padding:4px 8px;border-bottom:1px solid var(--b)"></div>
+ <div id="evsum" class="small" style="padding:4px 10px"></div>
+ <div id="evlog" style="flex:1;overflow-y:auto;padding:6px 8px"></div></div>`],
 ['stream','📺 Yayın bilgisi',{x:984,y:8,w:310,h:320},`<div class="pb" id="streambox"></div>`],
 ['stats','📊 İstatistikler',{x:636,y:336,w:340,h:332},`<div class="pb" id="statbox"></div>`],
 ['actions','🛠 Kanal eylemleri',{x:984,y:336,w:310,h:420},`<div class="pb">
@@ -169,7 +180,10 @@ function saveLayout(){
 let rsT;const ro=new ResizeObserver(()=>{clearTimeout(rsT);rsT=setTimeout(saveLayout,400)});
 P.forEach(([id])=>ro.observe($('pn-'+id)));
 function front(d){d.style.zIndex=++zTop}
-function showPanel(id){const d=$('pn-'+id);d.style.display='flex';front(d);saveLayout();buildMenu()}
+// Ekran dışında kalan paneli görünür alana çek (küçük ekranlarda panel kaybolmasın)
+function fitPanel(d){if(d.style.display==='none')return;const W=wsp.clientWidth,H=wsp.clientHeight;
+  if(d.offsetLeft>W-120)d.style.left=Math.max(0,W-d.offsetWidth-8)+'px';if(d.offsetTop>H-40)d.style.top=Math.max(0,H-d.offsetHeight-8)+'px'}
+function showPanel(id){const d=$('pn-'+id);d.style.display='flex';fitPanel(d);front(d);saveLayout();buildMenu()}
 wsp.addEventListener('pointerdown',e=>{
   const pn=e.target.closest('.pn');if(pn)front(pn);
   const h=e.target.closest('.ph');if(!h||e.target.dataset.hide)return;
@@ -210,6 +224,7 @@ async function connect(){
   updMode();
   if(!/^\d+$/.test(room)){toast('Geçerli bir Chatroom ID gir');return}
   store.set('slug',slug);store.set('room',room);
+  evCh=curCh();evShow=200;renderEv();
   if($('pn-player').style.display!=='none')loadPlayer();
   loadEmotes();
   if(ws)ws.close();
@@ -231,40 +246,93 @@ function handlePusher(m){
     // Kick silenin adını göndermiyor: önce olaydaki alanlara bak, sonra panelden silinmiş mi, sonra AutoMod mu
     const by=(d.deleted_by&&(d.deleted_by.username||d.deleted_by.slug))||(d.deletedBy&&d.deletedBy.username)||(d.moderator&&d.moderator.username)||'';
     let byTxt=by?by:myDeletes.has(String(id))?'sen (panel)':d.aiModerated?'🤖 Kick AutoMod'+((d.violatedRules||[]).length?' ('+d.violatedRules.join(', ')+')':''):'';
-    const r=evt('🗑 '+(who?who+' kullanıcısının mesajı silindi':'Mesaj silindi')+(info?': '+info:''),'del');
+    const r=evt({type:'del',user:who,detail:info,by:byTxt||'bilinmiyor',unk:!byTxt});
     setBy(r,me,byTxt||'bilinmiyor',!byTxt);
     if(!byTxt&&who)pendDel.push({u:who,t:Date.now(),r,me});
   }
   else if(ev==='UserBannedEvent'){const w=d.user&&d.user.username,by=d.banned_by&&d.banned_by.username;counts.ban++;
     // ban/timeout'tan hemen önce (8 sn) aynı kişinin silinen mesajlarını bu moderatöre bağla
-    if(by){const now=Date.now();pendDel=pendDel.filter(p=>{if(p.u===w&&now-p.t<8000){setBy(p.r,p.me,by+' (ban/timeout ile)');return false}return now-p.t<8000})}const bu=users[w];if(bu){if(d.permanent)bu.bans=(bu.bans||0)+1;else bu.timeouts=(bu.timeouts||0)+1;refreshPop(w)}evt((d.permanent?'🔨 BAN: ':'⏱ TIMEOUT: ')+w+(d.duration?' ('+d.duration+' dk)':'')+(by?' ← '+by:''),'ban')}
-  else if(ev==='UserUnbannedEvent'){const w=d.user&&d.user.username,by=d.unbanned_by&&d.unbanned_by.username;counts.unban++;evt('✅ UNBAN: '+w+(by?' ← '+by:''),'unban')}
-  else if(ev==='SubscriptionEvent')evt('⭐ Abone: '+d.username+(d.months?' ('+d.months+' ay)':''),'sub',false);
-  else if(ev==='GiftedSubscriptionsEvent')evt('🎁 '+(d.gifter_username||'?')+' '+((d.gifted_usernames||[]).length||'')+' abonelik hediye etti','gift',false);
-  else if(ev==='RewardRedeemedEvent')evt('🏆 '+(d.username||'?')+' ödül aldı: '+(d.reward_title||''),'rew',false);
+    if(by){const now=Date.now();pendDel=pendDel.filter(p=>{if(p.u===w&&now-p.t<8000){setBy(p.r,p.me,by+' (ban/timeout ile)');return false}return now-p.t<8000})}
+    const bu=users[w];if(bu){if(d.permanent)bu.bans=(bu.bans||0)+1;else bu.timeouts=(bu.timeouts||0)+1;refreshPop(w)}
+    evt({type:d.permanent?'ban':'timeout',user:w,by:by||'',detail:d.duration&&!d.permanent?d.duration+' dk':(d.reason||'')})}
+  else if(ev==='UserUnbannedEvent'){const w=d.user&&d.user.username,by=d.unbanned_by&&d.unbanned_by.username;counts.unban++;evt({type:'unban',user:w,by:by||''})}
+  else if(ev==='SubscriptionEvent')evt({type:'sub',user:d.username,detail:d.months?d.months+' ay':''},false);
+  else if(ev==='GiftedSubscriptionsEvent'){const g=d.gifted_usernames||[];evt({type:'gift',user:d.gifter_username||'?',detail:g.length+' abonelik'+(g.length&&g.length<=5?': '+g.join(', '):'')},false)}
+  else if(ev==='RewardRedeemedEvent')evt({type:'rew',user:d.username||'?',detail:d.reward_title||''},false);
   else if(ev==='ChatroomUpdatedEvent'){MODES=d;renderStream()}
 }
 function sys(t){addEl('<div class="msg sys"><span class="ts">'+hm()+'</span>'+esc(t)+'</div>')}
-function evt(t,cls,feed=true){
-  const r=document.createElement('div');r.className='erow '+cls;r.innerHTML='<span class="ts" title="'+full()+'">'+hm()+'</span>'+esc(t);
-  const L=$('evlog');if(L.firstChild&&L.firstChild.classList&&L.firstChild.classList.contains('small'))L.innerHTML='';
-  L.prepend(r);while(L.children.length>300)L.removeChild(L.lastChild);
-  const fr=feed?addEl('<div class="msg evt '+(cls==='ban'?'ban':cls==='del'?'del':'')+'" data-flag="1"><span class="ts">'+hm()+'</span>'+esc(t)+'</div>'):null;
-  if(cls==='ban'||cls==='del'){try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=cls==='ban'?520:380;g.gain.value=.04;o.start();o.stop(a.currentTime+.12)}catch(e){}}
+
+/* ================= ETKİNLİK AKIŞI: kanal bazlı, kalıcı geçmiş ================= */
+const ET={ban:['🔨','Ban','ban'],timeout:['⏱','Timeout','ban'],del:['🗑','Silme','del'],unban:['✅','Unban','unban'],word:['🚫','Yasaklı kelime','word'],sub:['⭐','Abone','sub'],gift:['🎁','Hediye','gift'],rew:['🏆','Ödül','rew']};
+const evText=r=>({ban:'banlandı',timeout:'timeout yedi',del:'mesajı silindi',unban:'banı kaldırıldı',word:'yasaklı kelime yazdı',sub:'abone oldu',gift:'abonelik hediye etti',rew:'ödül aldı'}[r.type]||r.type);
+const EVMAX=3000;
+let evCh=null,evFilter=store.get('evFilter','all'),evShow=200;
+const curCh=()=>($('slug').value.trim().toLowerCase()||'kanalsız');
+const evKey=ch=>'ev:'+ch;
+const evLoad=ch=>store.get(evKey(ch),[]);
+const evCache={};
+function evList(ch){return evCache[ch]||(evCache[ch]=evLoad(ch))}
+let evSaveT={};
+function evSave(ch){clearTimeout(evSaveT[ch]);evSaveT[ch]=setTimeout(()=>{store.set(evKey(ch),evList(ch));const chs=store.get('evChs',[]);if(!chs.includes(ch)){chs.push(ch);store.set('evChs',chs)}},500)}
+function evt(rec,feed=true){
+  const ch=curCh();rec.t=Date.now();rec.ch=ch;rec.id=rec.t.toString(36)+Math.random().toString(36).slice(2,6);
+  const L=evList(ch);L.push(rec);if(L.length>EVMAX)L.splice(0,L.length-EVMAX);evSave(ch);
+  if(evCh===null)evCh=ch;
+  if(evCh===ch)renderEv();else renderEvChs();
+  const k=ET[rec.type]||['•',rec.type,''],line=k[0]+' '+(rec.user||'?')+' '+evText(rec)+(rec.detail?': '+rec.detail:'')+(rec.by&&rec.type!=='del'?' ← '+rec.by:'');
+  const fr=feed?addEl('<div class="msg evt '+(k[2]==='ban'?'ban':k[2]==='del'?'del':'')+'" data-flag="1"><span class="ts">'+hm()+'</span>'+esc(line)+'</div>'):null;
+  if(k[2]==='ban'||k[2]==='del'){try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=k[2]==='ban'?520:380;g.gain.value=.04;o.start();o.stop(a.currentTime+.12)}catch(e){}}
   stats();
-  return [r,fr];
+  return {rec,fr};
 }
-/* Silen kişi bilgisi: etkinlik satırına, sohbetteki olay satırına ve silinen mesajın yanına yazılır */
+const dayName=t=>{const d=new Date(t),n=new Date(),y=new Date(n-864e5);const s=x=>x.toDateString();return s(d)===s(n)?'Bugün':s(d)===s(y)?'Dün':d.toLocaleDateString('tr-TR',{day:'numeric',month:'long',year:'numeric',weekday:'long'})};
+function renderEvChs(){
+  const chs=[...new Set([...store.get('evChs',[]),...Object.keys(evCache).filter(c=>evCache[c].length),curCh()])].filter(c=>c!=='kanalsız'||evList(c).length);
+  if(evCh===null)evCh=curCh();
+  $('evch').innerHTML=chs.map(c=>'<option value="'+esc(c)+'"'+(c===evCh?' selected':'')+'>'+esc(c)+' ('+evList(c).length+')'+(c===curCh()?' • canlı':'')+'</option>').join('');
+}
+function renderEv(){
+  renderEvChs();
+  const all=evList(evCh),q=$('evq').value.trim().toLocaleLowerCase('tr');
+  const cnt={};all.forEach(r=>{cnt[r.type]=(cnt[r.type]||0)+1});
+  $('evf').innerHTML=[['all','Tümü',all.length],...Object.keys(ET).map(k=>[k,ET[k][0]+' '+ET[k][1],cnt[k]||0])].filter(x=>x[0]==='all'||x[2])
+    .map(x=>'<span class="tag'+(evFilter===x[0]?' on':'')+'" data-f="'+x[0]+'" style="cursor:pointer">'+x[1]+' <span class="small">'+x[2]+'</span></span>').join('');
+  let rows=all.filter(r=>(evFilter==='all'||r.type===evFilter)&&(!q||[r.user,r.by,r.detail].join(' ').toLocaleLowerCase('tr').includes(q)));
+  const total=rows.length;rows=rows.slice(-evShow).reverse();
+  let last='',h='';
+  rows.forEach(r=>{const dn=dayName(r.t);if(dn!==last){h+='<div class="eday">'+dn+'</div>';last=dn}
+    const k=ET[r.type]||['•',r.type,''];
+    h+='<div class="erow '+k[2]+'"><span class="ts" title="'+full(r.t)+'">'+hm(r.t)+'</span><span class="eic">'+k[0]+'</span> '+
+      (r.user?'<b class="u eu" data-u="'+esc(r.user)+'">'+esc(r.user)+'</b> ':'')+'<span class="small">'+evText(r)+'</span>'+
+      (r.detail?'<div class="edt">'+(r.type==='del'||r.type==='word'?'“'+esc(r.detail)+'”':esc(r.detail))+'</div>':'')+
+      (r.by?'<span class="eby'+(r.unk?' unk':'')+'">'+(r.type==='del'?'silen: ':r.type==='word'?'kelime: ':'← ')+esc(r.by)+'</span>':'')+'</div>'});
+  $('evlog').innerHTML=h||'<div class="small">'+(all.length?'Filtreye uyan etkinlik yok.':'Bu kanal için henüz kayıt yok. Ban, timeout, silinen mesaj, yasaklı kelime, abonelik, hediye ve ödüller burada birikir ve panel kapansa da saklanır.')+'</div>';
+  if(total>evShow)$('evlog').insertAdjacentHTML('beforeend','<button id="evmore" style="width:100%;margin-top:6px">Daha eski '+Math.min(200,total-evShow)+' kaydı göster ('+(total-evShow)+' kaldı)</button>');
+  const today=all.filter(r=>dayName(r.t)==='Bugün'),c=t=>today.filter(r=>r.type===t).length;
+  $('evsum').textContent='Bugün: '+c('ban')+' ban • '+c('timeout')+' timeout • '+c('del')+' silme • '+c('word')+' yasaklı kelime';
+}
+$('evch').onchange=e=>{evCh=e.target.value;evShow=200;renderEv()};
+$('evq').oninput=()=>{evShow=200;renderEv()};
+$('evf').onclick=e=>{const t=e.target.closest('[data-f]');if(t){evFilter=t.dataset.f;store.set('evFilter',evFilter);evShow=200;renderEv()}};
+$('evlog').onclick=e=>{if(e.target.id==='evmore'){evShow+=200;renderEv();return}const u=e.target.closest('.eu');if(u&&users[u.dataset.u])openPop(u.dataset.u,u);else if(u)toast(u.dataset.u+' bu oturumda yazmadı')};
+$('evclr').onclick=()=>{if(!confirm(evCh+' kanalının tüm etkinlik geçmişi silinsin mi? Bu geri alınamaz.'))return;evCache[evCh]=[];store.set(evKey(evCh),[]);renderEv()};
+$('evexp').onclick=()=>{const rows=evList(evCh).map(r=>[full(r.t),ET[r.type]?ET[r.type][1]:r.type,r.user||'',r.by||'',(r.detail||'').replace(/"/g,'""')].map(v=>'"'+v+'"').join(';'));
+  const b=new Blob(['﻿Tarih;Tür;Kullanıcı;Moderatör;Detay\n'+rows.join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='etkinlik-'+evCh+'.csv';a.click()};
+
+/* Silen kişi bilgisi: etkinlik kaydına, sohbetteki olay satırına ve silinen mesajın yanına yazılır */
 const myDeletes=new Set();let pendDel=[];
-function setBy(rows,me,by,unknown){
-  const h='<span class="why'+(unknown?'':' r')+'" style="'+(unknown?'background:var(--b);color:var(--m)':'')+'">silen: '+esc(by)+'</span>';
-  (rows||[]).concat(me?[me]:[]).forEach(el=>{if(!el)return;const o=el.querySelector('.byw');if(o)o.outerHTML=h.replace('class="why','class="byw why');else el.insertAdjacentHTML('beforeend',h.replace('class="why','class="byw why'))});
+function setBy(r,me,by,unknown){
+  if(r&&r.rec){r.rec.by=by;r.rec.unk=!!unknown;evSave(r.rec.ch);if(evCh===r.rec.ch)renderEv()}
+  const h='<span class="byw why'+(unknown?'':' r')+'" style="'+(unknown?'background:var(--b);color:var(--m)':'')+'">silen: '+esc(by)+'</span>';
+  [r&&r.fr,me].forEach(el=>{if(!el)return;const o=el.querySelector('.byw');if(o)o.outerHTML=h;else el.insertAdjacentHTML('beforeend',h)});
 }
 
 /* ================= SOHBET ================= */
 function check(d,u){
-  const txt=d.content||'',reasons=[],low=txt.toLowerCase();
-  if(badWords.some(w=>low.includes(w)))reasons.push(['yasaklı kelime',1]);
+  const txt=d.content||'',reasons=[],low=txt.replace(/\[emote:\d+:[^\]]+\]/g,' ').toLocaleLowerCase('tr');
+  const hits=badWords.filter(w=>low.includes(w.toLocaleLowerCase('tr')));
+  d._bw=hits;if(hits.length)reasons.push(['🚫 yasaklı: '+hits.join(', '),1]);
   if($('fLink').checked&&/(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|tv|gg|io|xyz|ru|co)\b)/i.test(txt.replace(/\[emote:\d+:[^\]]+\]/g,'')))reasons.push(['LİNK',1]);
   const clean=txt.replace(/\[emote:\d+:[^\]]+\]/g,'').replace(/[^A-Za-zÇĞİÖŞÜçğıöşü]/g,'');
   if($('fCaps').checked&&clean.length>=12&&clean.replace(/[^A-ZÇĞİÖŞÜ]/g,'').length/clean.length>0.7)reasons.push(['BÜYÜK HARF',1]);
@@ -297,9 +365,20 @@ function onMsg(d){
   const acts=isMod?'':'<span class="act" data-id="'+esc(d.id||'')+'" data-u="'+esc(name)+'"><b data-a="del" title="Mesajı sil">🗑</b><b data-a="t10" title="10 dakika timeout">⏱</b><b data-a="ban" title="Kalıcı ban">🔨</b></span>';
   const el=addEl('<div class="msg'+cls+'" data-flag="'+(reasons.length?1:0)+'" data-u="'+esc(name)+'"><span class="ts" title="'+full(d.created_at)+'">'+hm(d.created_at)+'</span>'+acts+badgeHtml(u.bdg)+'<span class="u" style="color:'+esc(u.color)+'" data-u="'+esc(name)+'">'+esc(name)+'</span>: <span class="tx">'+txt+'</span>'+reasons.map(r=>'<span class="why'+(r[1]?' r':'')+'">'+r[0]+'</span>').join('')+'</div>');
   if(d.id)msgEls[d.id]=el;
+  if(d._bw&&d._bw.length){markWords(el.querySelector('.tx'),d._bw);evt({type:'word',user:name,detail:(d.content||'').replace(/\[emote:\d+:([^\]]+)\]/g,':$1:').slice(0,150),by:d._bw.join(', '),unk:true},false)}
   if(cur===name)showUser(name);
   refreshPop(name);
   stats();
+}
+// Mesaj içindeki yasaklı kelimeleri kırmızı işaretle (sadece metin kısımlarında, Türkçe harf duyarlı)
+function markWords(root,words){
+  if(!root)return;const ws=words.map(w=>w.toLocaleLowerCase('tr')).filter(Boolean);
+  const walk=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);const nodes=[];while(walk.nextNode())nodes.push(walk.currentNode);
+  nodes.forEach(n=>{const s=n.nodeValue,l=s.toLocaleLowerCase('tr');if(l.length!==s.length)return;let i=0,out=[],any=false;
+    while(i<s.length){let hit=null;for(const w of ws)if(l.startsWith(w,i)&&(!hit||w.length>hit.length))hit=w;
+      if(hit){out.push([s.slice(i,i+hit.length),1]);i+=hit.length;any=true}else{if(out.length&&!out[out.length-1][1])out[out.length-1][0]+=s[i];else out.push([s[i],0]);i++}}
+    if(!any)return;const f=document.createDocumentFragment();
+    out.forEach(([t,m])=>{if(m){const k=document.createElement('mark');k.className='bw';k.textContent=t;f.appendChild(k)}else f.appendChild(document.createTextNode(t))});n.replaceWith(f)});
 }
 /* ---- Duraklatma: Alt basılıyken veya kutu işaretliyken mesajlar bekletilir, kaybolmaz ---- */
 let altHeld=false,held=[];
@@ -516,7 +595,7 @@ function renderBW(){
   $('bwlist').innerHTML=badWords.map((w,i)=>'<span class="tag">'+esc(w)+'<i data-i="'+i+'">×</i></span>').join('')||'<span class="small">Henüz yok</span>';
   $('bwlist').querySelectorAll('i').forEach(x=>x.onclick=()=>{badWords.splice(+x.dataset.i,1);store.set('badWords',badWords);renderBW()});
 }
-$('bwadd').onclick=()=>{const w=$('bw').value.trim().toLowerCase();if(w&&!badWords.includes(w)){badWords.push(w);store.set('badWords',badWords);renderBW()}$('bw').value=''};
+$('bwadd').onclick=()=>{const w=$('bw').value.trim().toLocaleLowerCase('tr');if(w&&!badWords.includes(w)){badWords.push(w);store.set('badWords',badWords);renderBW()}$('bw').value=''};
 $('bw').onkeydown=e=>{if(e.key==='Enter')$('bwadd').click()};renderBW();
 
 /* ================= İSTATİSTİK + YAYIN ================= */
@@ -571,7 +650,8 @@ async function applyUpdate(){
 $('upd').onclick=()=>{if(UPD&&UPD.newer)applyUpdate();else checkUpdate(false)};
 
 /* ================= BAŞLAT ================= */
-renderStream();stats();buildMenu();
+renderStream();stats();buildMenu();renderEv();
+P.forEach(([id])=>fitPanel($('pn-'+id)));
 sys($('room').value?'Kayıtlı ayarlar yüklendi. Bağlan\'a basabilirsin.':'Kanal adını yaz, Bağlan\'a bas.');
 initAuth().then(()=>checkUpdate(true));
 </script>
