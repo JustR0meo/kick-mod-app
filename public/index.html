@@ -211,8 +211,19 @@ function J(m){try{return JSON.parse(m.data)}catch(e){return null}}
 function handlePusher(m){
   const ev=m.event.replace(/^App\\Events\\/,'');const d=J(m);if(!d)return;
   if(ev==='ChatMessageEvent')onMsg(d);
-  else if(ev==='MessageDeletedEvent'){const id=d.message&&d.message.id||d.id;let info='';counts.del++;const me=msgEls[id];if(me){me.classList.add('deleted');info=me.querySelector('.tx').textContent.slice(0,80);const du=users[me.dataset.u];if(du){du.deleted=(du.deleted||0)+1;refreshPop(me.dataset.u)}}evt('🗑 Mesaj silindi'+(info?': '+info:''),'del')}
-  else if(ev==='UserBannedEvent'){const w=d.user&&d.user.username,by=d.banned_by&&d.banned_by.username;counts.ban++;const bu=users[w];if(bu){if(d.permanent)bu.bans=(bu.bans||0)+1;else bu.timeouts=(bu.timeouts||0)+1;refreshPop(w)}evt((d.permanent?'🔨 BAN: ':'⏱ TIMEOUT: ')+w+(d.duration?' ('+d.duration+' dk)':'')+(by?' ← '+by:''),'ban')}
+  else if(ev==='MessageDeletedEvent'){
+    const id=d.message&&d.message.id||d.id;let info='',who='';counts.del++;const me=msgEls[id];
+    if(me){me.classList.add('deleted');info=me.querySelector('.tx').textContent.slice(0,80);who=me.dataset.u||'';const du=users[who];if(du){du.deleted=(du.deleted||0)+1;refreshPop(who)}}
+    // Kick silenin adını göndermiyor: önce olaydaki alanlara bak, sonra panelden silinmiş mi, sonra AutoMod mu
+    const by=(d.deleted_by&&(d.deleted_by.username||d.deleted_by.slug))||(d.deletedBy&&d.deletedBy.username)||(d.moderator&&d.moderator.username)||'';
+    let byTxt=by?by:myDeletes.has(String(id))?'sen (panel)':d.aiModerated?'🤖 Kick AutoMod'+((d.violatedRules||[]).length?' ('+d.violatedRules.join(', ')+')':''):'';
+    const r=evt('🗑 '+(who?who+' kullanıcısının mesajı silindi':'Mesaj silindi')+(info?': '+info:''),'del');
+    setBy(r,me,byTxt||'bilinmiyor',!byTxt);
+    if(!byTxt&&who)pendDel.push({u:who,t:Date.now(),r,me});
+  }
+  else if(ev==='UserBannedEvent'){const w=d.user&&d.user.username,by=d.banned_by&&d.banned_by.username;counts.ban++;
+    // ban/timeout'tan hemen önce (8 sn) aynı kişinin silinen mesajlarını bu moderatöre bağla
+    if(by){const now=Date.now();pendDel=pendDel.filter(p=>{if(p.u===w&&now-p.t<8000){setBy(p.r,p.me,by+' (ban/timeout ile)');return false}return now-p.t<8000})}const bu=users[w];if(bu){if(d.permanent)bu.bans=(bu.bans||0)+1;else bu.timeouts=(bu.timeouts||0)+1;refreshPop(w)}evt((d.permanent?'🔨 BAN: ':'⏱ TIMEOUT: ')+w+(d.duration?' ('+d.duration+' dk)':'')+(by?' ← '+by:''),'ban')}
   else if(ev==='UserUnbannedEvent'){const w=d.user&&d.user.username,by=d.unbanned_by&&d.unbanned_by.username;counts.unban++;evt('✅ UNBAN: '+w+(by?' ← '+by:''),'unban')}
   else if(ev==='SubscriptionEvent')evt('⭐ Abone: '+d.username+(d.months?' ('+d.months+' ay)':''),'sub',false);
   else if(ev==='GiftedSubscriptionsEvent')evt('🎁 '+(d.gifter_username||'?')+' '+((d.gifted_usernames||[]).length||'')+' abonelik hediye etti','gift',false);
@@ -224,9 +235,16 @@ function evt(t,cls,feed=true){
   const r=document.createElement('div');r.className='erow '+cls;r.innerHTML='<span class="ts" title="'+full()+'">'+hm()+'</span>'+esc(t);
   const L=$('evlog');if(L.firstChild&&L.firstChild.classList&&L.firstChild.classList.contains('small'))L.innerHTML='';
   L.prepend(r);while(L.children.length>300)L.removeChild(L.lastChild);
-  if(feed)addEl('<div class="msg evt '+(cls==='ban'?'ban':cls==='del'?'del':'')+'" data-flag="1"><span class="ts">'+hm()+'</span>'+esc(t)+'</div>');
+  const fr=feed?addEl('<div class="msg evt '+(cls==='ban'?'ban':cls==='del'?'del':'')+'" data-flag="1"><span class="ts">'+hm()+'</span>'+esc(t)+'</div>'):null;
   if(cls==='ban'||cls==='del'){try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=cls==='ban'?520:380;g.gain.value=.04;o.start();o.stop(a.currentTime+.12)}catch(e){}}
   stats();
+  return [r,fr];
+}
+/* Silen kişi bilgisi: etkinlik satırına, sohbetteki olay satırına ve silinen mesajın yanına yazılır */
+const myDeletes=new Set();let pendDel=[];
+function setBy(rows,me,by,unknown){
+  const h='<span class="why'+(unknown?'':' r')+'" style="'+(unknown?'background:var(--b);color:var(--m)':'')+'">silen: '+esc(by)+'</span>';
+  (rows||[]).concat(me?[me]:[]).forEach(el=>{if(!el)return;const o=el.querySelector('.byw');if(o)o.outerHTML=h.replace('class="why','class="byw why');else el.insertAdjacentHTML('beforeend',h.replace('class="why','class="byw why'))});
 }
 
 /* ================= SOHBET ================= */
@@ -321,6 +339,7 @@ async function doAction(kind,n,min){
 }
 async function delMsg(id,el){
   if(!(auth&&bid&&id)){toast('Silmek için giriş yap ve kanala bağlan');return}
+  myDeletes.add(String(id));
   try{await api('/api/delete',{message_id:id});el.classList.add('deleted');toast('🗑 Mesaj silindi')}catch(e){toast('Silinemedi: '+e.message)}
 }
 async function runCmd(cmd){
