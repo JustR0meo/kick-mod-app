@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kick Mod Paneli</title>
+<style>
+:root{--bg:#0b0e0f;--p:#14191b;--p2:#1b2124;--b:#2a3236;--t:#e8eeee;--m:#8a9a9d;--g:#53fc18;--r:#ff4d4d;--y:#ffc233;--o:#ff8a3d;--bl:#2f7bff;--pk:#e040fb}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--t);font:14px/1.4 system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--p);border-bottom:1px solid var(--b);flex-wrap:wrap;position:relative;z-index:50}
+header b.logo{color:var(--g);font-size:16px}
+input,select,button,textarea{font:inherit;color:var(--t);background:var(--p2);border:1px solid var(--b);border-radius:6px;padding:5px 9px}
+input:focus,textarea:focus{outline:1px solid var(--g)}
+button{cursor:pointer}button:hover{border-color:var(--g)}
+.pri{background:var(--g);color:#000;border-color:var(--g);font-weight:600}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--r)}.dot.on{background:var(--g)}
+.small{color:var(--m);font-size:12px}
+.mode{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--p2);border:1px solid var(--b)}.mode.ok{border-color:var(--g);color:var(--g)}
+#login{text-decoration:none}
+#menu{position:absolute;top:100%;left:0;background:var(--p);border:1px solid var(--b);border-radius:8px;padding:8px;display:none;min-width:200px;box-shadow:0 8px 24px #000a}
+#menu.show{display:block}#menu label{display:flex;gap:8px;padding:3px 4px;cursor:pointer}
+#wsp{position:relative;flex:1;overflow:auto}
+.pn{position:absolute;display:flex;flex-direction:column;background:var(--p);border:1px solid var(--b);border-radius:10px;resize:both;overflow:hidden;min-width:200px;min-height:110px;box-shadow:0 4px 16px #0008}
+.ph{display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--p2);border-bottom:1px solid var(--b);cursor:move;user-select:none;font-weight:600;font-size:13px}
+.ph i{font-style:normal;cursor:pointer;color:var(--m);padding:0 4px}.ph i:hover{color:var(--r)}
+.pb{flex:1;overflow:auto;min-height:0;padding:10px}.pb.col{display:flex;flex-direction:column;padding:0}
+.tools{display:flex;gap:8px;padding:6px 10px;border-bottom:1px solid var(--b);flex-wrap:wrap;align-items:center}
+.tools input[type=text]{flex:1;min-width:100px}
+label.c{color:var(--m);display:flex;gap:4px;align-items:center;font-size:13px}
+#feed{flex:1;overflow-y:auto;padding:4px 0}
+.msg{padding:4px 10px;margin:2px 6px;border:2px solid transparent;border-radius:6px;word-break:break-word}
+.msg:hover{background:var(--p2)}
+.msg.flag{border-color:var(--o);background:#ff8a3d12}
+.msg.alert{border-color:var(--r);background:#ff4d4d22;box-shadow:0 0 0 1px #ff4d4d66,0 0 14px #ff4d4d44;font-size:15px;font-weight:700}
+.msg.mod{border-color:var(--bl);background:#2f7bff18}
+.msg.vip{border-color:var(--pk);background:#e040fb14}
+.msg.sys{color:var(--m);font-size:12px}
+.msg.evt{border-color:var(--y);background:#ffc23320;font-weight:700}
+.msg.evt.ban{border-color:var(--r);background:#ff4d4d2e}.msg.evt.del{border-color:var(--o)}
+.msg.deleted .tx{text-decoration:line-through;opacity:.5}
+.ts{color:var(--m);font-size:11px;margin-right:6px;font-variant-numeric:tabular-nums}
+.u{font-weight:700;cursor:pointer}.u:hover{text-decoration:underline}
+.bd{font-size:10px;padding:1px 5px;border-radius:4px;margin-right:4px;background:var(--b);text-transform:uppercase}
+.bd.moderator{background:var(--bl)}.bd.broadcaster{background:var(--r)}.bd.vip{background:var(--pk)}.bd.subscriber,.bd.sub_gifter{background:#1e8a3d}.bd.og{background:var(--y);color:#000}
+.why{font-size:10px;background:var(--o);color:#000;border-radius:4px;padding:1px 5px;margin-left:6px}
+.why.r{background:var(--r);color:#fff;font-size:11px;font-weight:700}
+.act{float:right;margin-left:8px;display:flex;gap:3px;opacity:.4}.msg:hover .act{opacity:1}
+.act b{font-size:11px;font-weight:600;padding:1px 6px;border-radius:5px;background:var(--p2);border:1px solid var(--b);cursor:pointer}
+.act b:hover{border-color:var(--y);color:var(--y)}.act b[data-a=ban]:hover,.act b[data-a=del]:hover{border-color:var(--r);color:var(--r)}
+.erow{padding:5px 8px;border-radius:6px;margin-bottom:5px;background:var(--p2);border-left:3px solid var(--m);font-size:13px}
+.erow.ban{border-color:var(--r)}.erow.del{border-color:var(--o)}.erow.sub{border-color:var(--g)}.erow.gift{border-color:var(--pk)}.erow.rew{border-color:var(--bl)}.erow.unban{border-color:var(--y)}
+.btns{display:flex;gap:6px;flex-wrap:wrap}.btns button{flex:1;min-width:52px;padding:5px 4px;font-size:13px}
+.tm:hover{border-color:var(--y);color:var(--y)}
+.bn{border-color:#ff4d4d55;color:var(--r)}.bn:hover{background:var(--r);color:#fff}
+.hist{max-height:170px;overflow-y:auto;font-size:13px;color:var(--m)}.hist div{padding:2px 0;border-bottom:1px dashed var(--b)}
+textarea{width:100%;min-height:56px;resize:vertical}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat{background:var(--p2);border-radius:8px;padding:8px}.stat b{font-size:18px;display:block}.stat span{color:var(--m);font-size:11px}
+.tag{display:inline-block;background:var(--p2);border:1px solid var(--b);border-radius:12px;padding:2px 8px;margin:2px;font-size:12px}
+.tag i{cursor:pointer;color:var(--r);margin-left:4px;font-style:normal}.tag.on{border-color:var(--g);color:var(--g)}
+.live{display:inline-block;font-weight:700;padding:2px 10px;border-radius:12px;background:var(--p2);color:var(--m)}.live.on{background:var(--r);color:#fff}
+.ttl{font-size:15px;font-weight:700;margin:8px 0 2px}
+h4{margin:12px 0 6px;font-size:12px;text-transform:uppercase;color:var(--m);letter-spacing:.05em}
+.row{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}.row>span{min-width:92px;color:var(--m);font-size:13px}.row input{flex:1;min-width:80px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--g);color:#000;padding:8px 14px;border-radius:8px;font-weight:600;opacity:0;transition:.2s;pointer-events:none;z-index:99}
+#toast.s{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <b class="logo">⚡ Kick Mod</b><span class="dot" id="dot"></span>
+  <input id="slug" placeholder="Kanal adı" style="width:130px">
+  <input id="room" placeholder="Chatroom ID" style="width:115px" inputmode="numeric">
+  <button class="pri" id="go">Bağlan</button>
+  <button id="help" title="Chatroom ID'yi elle bulmak için">ID?</button>
+  <span id="who" class="small"></span><span id="mode" class="mode">Komut kopyalama modu</span>
+  <a id="login" href="/login"><button class="pri">Kick ile giriş yap</button></a><button id="logout" style="display:none">Çıkış</button>
+  <span style="flex:1"></span>
+  <button id="menubtn">▦ Paneller</button>
+  <button id="reset" title="Panelleri varsayılan yerine al">Düzeni sıfırla</button>
+  <button id="upd" title="Güncellemeleri kontrol et">⟳ <span id="ver">v?</span></button>
+  <div id="menu"></div>
+</header>
+<div id="wsp"></div>
+<div id="toast"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hm=d=>{const x=d?new Date(d):new Date();return isNaN(x)?'--:--':x.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})};
+const full=d=>{const x=d?new Date(d):new Date();return isNaN(x)?'':x.toLocaleString('tr-TR')};
+function toast(t){const e=$('toast');e.textContent=t;e.classList.add('s');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('s'),1800)}
+function copy(t){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('Kopyalandı: '+t)).catch(()=>prompt('Kopyala:',t))}
+async function api(p,body){
+  const r=await fetch(p,body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.error||('Hata '+r.status));
+  return j;
+}
+
+/* ================= PANELLER ================= */
+const P=[
+['chat','💬 Sohbet',{x:8,y:8,w:620,h:660},`<div class="pb col"><div class="tools"><input type="text" id="search" placeholder="Mesaj veya kullanıcı ara…"><label class="c"><input type="checkbox" id="onlyflag"> İşaretli</label><label class="c"><input type="checkbox" id="pause"> Duraklat</label><button id="clear">Temizle</button></div><div id="feed"></div></div>`],
+['events','📣 Etkinlik akışı',{x:636,y:8,w:340,h:320},`<div class="pb" id="evlog"><div class="small">Ban, timeout, silinen mesaj, abonelik, hediye ve ödül olayları burada canlı akar.</div></div>`],
+['stream','📺 Yayın bilgisi',{x:984,y:8,w:310,h:320},`<div class="pb" id="streambox"></div>`],
+['stats','📊 İstatistikler',{x:636,y:336,w:340,h:332},`<div class="pb" id="statbox"></div>`],
+['actions','🛠 Kanal eylemleri',{x:984,y:336,w:310,h:420},`<div class="pb">
+ <label class="c"><input type="checkbox" id="direct"> Komutları doğrudan gönder (deneysel)</label>
+ <div class="small" style="margin:4px 0 8px">Kapalıyken komutu kopyalar, Kick sohbetine yapıştırırsın.</div>
+ <div class="row"><span>Yavaş mod</span><div class="btns"><button data-cmd="/slow 5">5s</button><button data-cmd="/slow 30">30s</button><button data-cmd="/slow off">Kapat</button></div></div>
+ <div class="row"><span>Sadece takipçi</span><div class="btns"><button data-cmd="/followonly">Aç</button><button data-cmd="/followonly off">Kapat</button></div></div>
+ <div class="row"><span>Emote modu</span><div class="btns"><button data-cmd="/emoteonly on">Aç</button><button data-cmd="/emoteonly off">Kapat</button></div></div>
+ <div class="row"><span>Abone modu</span><div class="btns"><button data-cmd="/subonly on">Aç</button><button data-cmd="/subonly off">Kapat</button></div></div>
+ <div class="row"><button data-cmd="/clear" style="flex:1">🧹 Sohbeti temizle</button></div>
+ <div class="row"><input id="ttl" placeholder="Yeni yayın başlığı"><button id="ttlb">Değiştir</button></div>
+ <h4>Hızlı mesajlar (sen belirle)</h4><div id="qmlist"></div>
+ <div class="row"><input id="qml" placeholder="Etiket" style="max-width:90px"><input id="qmt" placeholder="Gönderilecek mesaj"><button id="qmadd">Ekle</button></div>
+</div>`],
+['user','👤 Kullanıcı',{x:636,y:676,w:340,h:300},`<div class="pb" id="uinfo"><div class="small">Sohbette bir kullanıcı adına tıkla.</div></div>`],
+['filters','🚨 Filtreler',{x:984,y:764,w:310,h:300},`<div class="pb">
+ <h4 style="margin-top:0">Yasaklı kelimeler</h4>
+ <div class="row"><input id="bw" placeholder="kelime ekle"><button id="bwadd">Ekle</button></div><div id="bwlist"></div>
+ <h4>Otomatik işaretleme</h4>
+ <label class="c"><input type="checkbox" id="fLink"> Link</label><label class="c"><input type="checkbox" id="fCaps"> Aşırı büyük harf</label>
+ <label class="c"><input type="checkbox" id="fRep"> Tekrar / spam</label><label class="c"><input type="checkbox" id="fLong"> Çok uzun mesaj</label>
+</div>`],
+];
+let layout=store.get('layout',{}),zTop=10;
+const wsp=$('wsp');
+P.forEach(([id,title,def,html])=>{
+  const L={...def,vis:true,...(layout[id]||{})};
+  const d=document.createElement('div');d.className='pn';d.id='pn-'+id;
+  d.style.cssText=`left:${L.x}px;top:${L.y}px;width:${L.w}px;height:${L.h}px;z-index:${L.z||++zTop};display:${L.vis?'flex':'none'}`;
+  d.innerHTML=`<div class="ph"><span>${title}</span><i title="Gizle" data-hide="${id}">✕</i></div>${html}`;
+  wsp.appendChild(d);
+});
+function saveLayout(){
+  const o={};P.forEach(([id])=>{const d=$('pn-'+id);o[id]={x:d.offsetLeft,y:d.offsetTop,w:d.offsetWidth,h:d.offsetHeight,vis:d.style.display!=='none',z:+d.style.zIndex||10}});
+  store.set('layout',o);
+}
+let rsT;const ro=new ResizeObserver(()=>{clearTimeout(rsT);rsT=setTimeout(saveLayout,400)});
+P.forEach(([id])=>ro.observe($('pn-'+id)));
+function front(d){d.style.zIndex=++zTop}
+function showPanel(id){const d=$('pn-'+id);d.style.display='flex';front(d);saveLayout();buildMenu()}
+wsp.addEventListener('pointerdown',e=>{
+  const pn=e.target.closest('.pn');if(pn)front(pn);
+  const h=e.target.closest('.ph');if(!h||e.target.dataset.hide)return;
+  const sx=e.clientX,sy=e.clientY,ox=pn.offsetLeft,oy=pn.offsetTop;
+  const mv=ev=>{pn.style.left=Math.max(0,Math.round((ox+ev.clientX-sx)/4)*4)+'px';pn.style.top=Math.max(0,Math.round((oy+ev.clientY-sy)/4)*4)+'px'};
+  addEventListener('pointermove',mv);
+  addEventListener('pointerup',()=>{removeEventListener('pointermove',mv);saveLayout()},{once:true});
+});
+wsp.addEventListener('click',e=>{const h=e.target.dataset&&e.target.dataset.hide;if(h){$('pn-'+h).style.display='none';saveLayout();buildMenu()}});
+function buildMenu(){
+  $('menu').innerHTML=P.map(([id,t])=>`<label><input type="checkbox" data-p="${id}" ${$('pn-'+id).style.display!=='none'?'checked':''}> ${t}</label>`).join('');
+}
+$('menu').addEventListener('change',e=>{const id=e.target.dataset.p;if(!id)return;if(e.target.checked)showPanel(id);else{$('pn-'+id).style.display='none';saveLayout()}});
+$('menubtn').onclick=e=>{e.stopPropagation();buildMenu();$('menu').classList.toggle('show')};
+document.addEventListener('click',e=>{if(!e.target.closest('#menu'))$('menu').classList.remove('show')});
+$('reset').onclick=()=>{if(confirm('Tüm paneller varsayılan yerine dönsün mü?')){store.set('layout',{});location.reload()}};
+
+/* ================= DURUM ================= */
+let ws=null,auth=false,bid=null,users={},total=0,flagged=0,cur=null,msgEls={},counts={ban:0,del:0,unban:0},mins={},SI=null,MODES=null,PEAK=0;
+let badWords=store.get('badWords',[]),notes=store.get('notes',{}),qm=store.get('qm',[{l:'Linkler yasak',t:'Lütfen link paylaşmayın.'},{l:'Spam yok',t:'Lütfen spam yapmayın.'}]);
+$('slug').value=store.get('slug','');$('room').value=store.get('room','');
+const FL=store.get('filters',{fLink:1,fCaps:1,fRep:1,fLong:1});
+['fLink','fCaps','fRep','fLong'].forEach(k=>{$(k).checked=!!FL[k];$(k).onchange=()=>{FL[k]=$(k).checked?1:0;store.set('filters',FL)}});
+$('direct').checked=!!store.get('direct',0);$('direct').onchange=()=>store.set('direct',$('direct').checked?1:0);
+
+$('help').onclick=()=>{const s=$('slug').value.trim()||'kanaladi';alert('Chatroom ID otomatik bulunamazsa:\n\n1) Tarayıcıda aç: https://kick.com/api/v2/channels/'+s+'\n2) "chatroom":{"id": yazan yerdeki sayıyı kopyala\n3) Chatroom ID kutusuna yapıştır, Bağlan\'a bas.')};
+
+/* ================= BAĞLANTI ================= */
+async function connect(){
+  const slug=$('slug').value.trim();let room=$('room').value.trim();bid=null;
+  if(slug&&auth){try{const c=await api('/api/channel?slug='+encodeURIComponent(slug));bid=c.broadcaster_user_id;SI=c;SI.fetched=Date.now();renderStream();sys('Kanal bulundu, ban/timeout yetkisi hazır ✔')}catch(e){sys('Kanal bilgisi alınamadı ('+e.message+'). Butonlar komut kopyalayacak.')}}
+  if(!room&&slug){try{const c=await api('/api/chatroom?slug='+encodeURIComponent(slug));room=String(c.chatroom_id);$('room').value=room}catch(e){sys('Chatroom ID otomatik bulunamadı. "ID?" butonuna bak.')}}
+  updMode();
+  if(!/^\d+$/.test(room)){toast('Geçerli bir Chatroom ID gir');return}
+  store.set('slug',slug);store.set('room',room);
+  if(ws)ws.close();
+  ws=new EventSource('/api/stream?room='+room);
+  ws.onmessage=e=>{let x;try{x=JSON.parse(e.data)}catch(err){return}
+    if(x.status){sys(x.status);if(x.down)$('dot').classList.remove('on');return}
+    if(x.ready){$('dot').classList.add('on');sys('Bağlandı: chatrooms.'+room+'.v2 ✔');return}
+    if(x.pusher)handlePusher(x.pusher)};
+  ws.onerror=()=>$('dot').classList.remove('on');
+}
+$('go').onclick=connect;
+function J(m){try{return JSON.parse(m.data)}catch(e){return null}}
+function handlePusher(m){
+  const ev=m.event.replace(/^App\\Events\\/,'');const d=J(m);if(!d)return;
+  if(ev==='ChatMessageEvent')onMsg(d);
+  else if(ev==='MessageDeletedEvent'){const id=d.message&&d.message.id||d.id;let info='';counts.del++;if(msgEls[id]){msgEls[id].classList.add('deleted');info=msgEls[id].querySelector('.tx').textContent.slice(0,80)}evt('🗑 Mesaj silindi'+(info?': '+info:''),'del')}
+  else if(ev==='UserBannedEvent'){const w=d.user&&d.user.username,by=d.banned_by&&d.banned_by.username;counts.ban++;evt((d.permanent?'🔨 BAN: ':'⏱ TIMEOUT: ')+w+(d.duration?' ('+d.duration+' dk)':'')+(by?' ← '+by:''),'ban')}
+  else if(ev==='UserUnbannedEvent'){const w=d.user&&d.user.username,by=d.unbanned_by&&d.unbanned_by.username;counts.unban++;evt('✅ UNBAN: '+w+(by?' ← '+by:''),'unban')}
+  else if(ev==='SubscriptionEvent')evt('⭐ Abone: '+d.username+(d.months?' ('+d.months+' ay)':''),'sub',false);
+  else if(ev==='GiftedSubscriptionsEvent')evt('🎁 '+(d.gifter_username||'?')+' '+((d.gifted_usernames||[]).length||'')+' abonelik hediye etti','gift',false);
+  else if(ev==='RewardRedeemedEvent')evt('🏆 '+(d.username||'?')+' ödül aldı: '+(d.reward_title||''),'rew',false);
+  else if(ev==='ChatroomUpdatedEvent'){MODES=d;renderStream()}
+}
+function sys(t){addEl('<div class="msg sys"><span class="ts">'+hm()+'</span>'+esc(t)+'</div>')}
+function evt(t,cls,feed=true){
+  const r=document.createElement('div');r.className='erow '+cls;r.innerHTML='<span class="ts" title="'+full()+'">'+hm()+'</span>'+esc(t);
+  const L=$('evlog');if(L.firstChild&&L.firstChild.classList&&L.firstChild.classList.contains('small'))L.innerHTML='';
+  L.prepend(r);while(L.children.length>300)L.removeChild(L.lastChild);
+  if(feed)addEl('<div class="msg evt '+(cls==='ban'?'ban':cls==='del'?'del':'')+'" data-flag="1"><span class="ts">'+hm()+'</span>'+esc(t)+'</div>');
+  if(cls==='ban'||cls==='del'){try{const a=new (window.AudioContext||window.webkitAudioContext)(),o=a.createOscillator(),g=a.createGain();o.connect(g);g.connect(a.destination);o.frequency.value=cls==='ban'?520:380;g.gain.value=.04;o.start();o.stop(a.currentTime+.12)}catch(e){}}
+  stats();
+}
+
+/* ================= SOHBET ================= */
+function check(d,u){
+  const txt=d.content||'',reasons=[],low=txt.toLowerCase();
+  if(badWords.some(w=>low.includes(w)))reasons.push(['yasaklı kelime',1]);
+  if($('fLink').checked&&/(https?:\/\/|www\.|\b[a-z0-9-]+\.(com|net|org|tv|gg|io|xyz|ru|co)\b)/i.test(txt.replace(/\[emote:\d+:[^\]]+\]/g,'')))reasons.push(['LİNK',1]);
+  const clean=txt.replace(/\[emote:\d+:[^\]]+\]/g,'').replace(/[^A-Za-zÇĞİÖŞÜçğıöşü]/g,'');
+  if($('fCaps').checked&&clean.length>=12&&clean.replace(/[^A-ZÇĞİÖŞÜ]/g,'').length/clean.length>0.7)reasons.push(['BÜYÜK HARF',1]);
+  if($('fRep').checked){
+    if((u.last||[]).includes(low)&&low.length>3)reasons.push(['tekrar']);
+    if(/(.)\1{9,}/.test(txt))reasons.push(['harf spam']);
+    const now=Date.now();u.rate=(u.rate||[]).filter(t=>now-t<8000);u.rate.push(now);
+    if(u.rate.length>=6)reasons.push(['hızlı yazıyor']);
+  }
+  if($('fLong').checked&&txt.length>300)reasons.push(['uzun']);
+  return reasons;
+}
+function onMsg(d){
+  if($('pause').checked)return;
+  const s=d.sender||{},name=s.username||'?';
+  const u=users[name]=users[name]||{id:s.id,name,msgs:[],last:[],badges:[],count:0,color:(s.identity&&s.identity.color)||'#9fe870',first:Date.now()};
+  u.id=s.id||u.id;u.badges=((s.identity&&s.identity.badges)||[]).map(b=>b.type);u.count++;
+  const reasons=check(d,u);
+  u.msgs.push({t:Date.now(),txt:d.content,flag:reasons.map(r=>r[0])});
+  u.last=[...u.last.slice(-4),(d.content||'').toLowerCase()];
+  total++;if(reasons.length)flagged++;
+  const mk=Math.floor(Date.now()/60000);mins[mk]=(mins[mk]||0)+1;
+  const hard=reasons.some(r=>r[1]),isMod=u.badges.includes('moderator')||u.badges.includes('broadcaster'),isVip=u.badges.includes('vip');
+  let cls='';if(isMod)cls=' mod';else if(hard)cls=' alert';else if(isVip)cls=' vip';else if(reasons.length)cls=' flag';
+  const badges=u.badges.map(b=>'<span class="bd '+esc(b)+'">'+esc(b.replace('_',' '))+'</span>').join('');
+  const txt=esc(d.content||'').replace(/\[emote:\d+:([^\]]+)\]/g,'<span class="small">:$1:</span>');
+  const acts=isMod?'':'<span class="act" data-id="'+esc(d.id||'')+'" data-u="'+esc(name)+'"><b data-a="del" title="Mesajı sil">🗑</b><b data-a="t1" title="1 dk timeout">1dk</b><b data-a="t10" title="10 dk timeout">10dk</b><b data-a="ban" title="Banla">🔨</b></span>';
+  const el=addEl('<div class="msg'+cls+'" data-flag="'+(reasons.length?1:0)+'">'+acts+'<span class="ts" title="'+full(d.created_at)+'">'+hm(d.created_at)+'</span>'+badges+'<span class="u" style="color:'+esc(u.color)+'" data-u="'+esc(name)+'">'+esc(name)+'</span>: <span class="tx">'+txt+'</span>'+reasons.map(r=>'<span class="why'+(r[1]?' r':'')+'">'+r[0]+'</span>').join('')+'</div>');
+  if(d.id)msgEls[d.id]=el;
+  if(cur===name)showUser(name);
+  stats();
+}
+function addEl(html){
+  const f=$('feed'),near=f.scrollHeight-f.scrollTop-f.clientHeight<80;
+  const t=document.createElement('div');t.innerHTML=html;const el=t.firstChild;f.appendChild(el);
+  while(f.children.length>1500)f.removeChild(f.firstChild);
+  applyFilter(el);if(near)f.scrollTop=f.scrollHeight;return el;
+}
+function applyFilter(el){const q=$('search').value.toLowerCase(),of=$('onlyflag').checked;el.style.display=((!q||el.textContent.toLowerCase().includes(q))&&(!of||el.dataset.flag==='1'))?'':'none'}
+const refilter=()=>[...$('feed').children].forEach(applyFilter);
+$('search').oninput=refilter;$('onlyflag').onchange=refilter;$('clear').onclick=()=>{$('feed').innerHTML='';msgEls={}};
+$('feed').onclick=e=>{
+  const t=e.target,a=t.dataset.a;
+  if(a){const box=t.closest('.act'),n=box.dataset.u;
+    if(a==='del')delMsg(box.dataset.id,box.parentElement);
+    else if(a==='t1')doAction('timeout',n,1);else if(a==='t10')doAction('timeout',n,10);else if(a==='ban')doAction('ban',n);return}
+  if(t.classList.contains('u')){cur=t.dataset.u;showUser(cur);showPanel('user')}
+};
+
+/* ================= İŞLEMLER ================= */
+function updMode(){const m=$('mode'),ok=auth&&bid;m.className='mode'+(ok?' ok':'');m.textContent=ok?'Doğrudan işlem açık':(auth?'Kanal bekleniyor':'Komut kopyalama modu')}
+async function initAuth(){
+  try{const m=await api('/api/me');auth=true;$('who').textContent='👤 '+m.name;$('login').style.display='none';$('logout').style.display=''}catch(e){auth=false}
+  updMode();
+}
+$('logout').onclick=async()=>{try{await api('/api/logout',{})}catch(e){}location.reload()};
+async function doAction(kind,n,min){
+  const u=users[n],cmd=kind==='timeout'?'/timeout '+n+' '+min:kind==='ban'?'/ban '+n:'/unban '+n;
+  if(!(auth&&bid&&u&&u.id)){copy(cmd);return}
+  const base={broadcaster_user_id:bid,user_id:u.id};
+  try{
+    if(kind==='timeout')await api('/api/ban',{...base,duration:min,reason:'Mod paneli'});
+    else if(kind==='ban'){if(!confirm(n+' kalıcı olarak banlansın mı?'))return;await api('/api/ban',{...base,reason:'Mod paneli'})}
+    else await api('/api/unban',base);
+    toast('✔ '+cmd);
+  }catch(e){toast('Hata: '+e.message);copy(cmd)}
+}
+async function delMsg(id,el){
+  if(!(auth&&bid&&id)){toast('Silmek için giriş yap ve kanala bağlan');return}
+  try{await api('/api/delete',{message_id:id});el.classList.add('deleted');toast('🗑 Mesaj silindi')}catch(e){toast('Silinemedi: '+e.message)}
+}
+async function runCmd(cmd){
+  if($('direct').checked&&auth&&bid){try{await api('/api/chat',{broadcaster_user_id:bid,content:cmd});toast('Gönderildi: '+cmd)}catch(e){toast('Hata: '+e.message);copy(cmd)}}
+  else copy(cmd);
+}
+document.querySelectorAll('[data-cmd]').forEach(b=>b.onclick=()=>runCmd(b.dataset.cmd));
+$('ttlb').onclick=()=>{const v=$('ttl').value.trim();if(v)runCmd('/title '+v)};
+async function sendQuick(t){
+  if(auth&&bid){try{await api('/api/chat',{broadcaster_user_id:bid,content:t});toast('Gönderildi')}catch(e){toast('Hata: '+e.message);copy(t)}}else copy(t);
+}
+function renderQM(){
+  $('qmlist').innerHTML=qm.map((q,i)=>'<span class="tag" data-i="'+i+'" title="'+esc(q.t)+'" style="cursor:pointer">'+esc(q.l)+'<i data-x="'+i+'">×</i></span>').join('')||'<span class="small">Henüz yok</span>';
+}
+$('qmlist').onclick=e=>{
+  if(e.target.dataset.x!==undefined){qm.splice(+e.target.dataset.x,1);store.set('qm',qm);renderQM();return}
+  const t=e.target.closest('.tag');if(t)sendQuick(qm[+t.dataset.i].t);
+};
+$('qmadd').onclick=()=>{const l=$('qml').value.trim(),t=$('qmt').value.trim();if(l&&t){qm.push({l,t});store.set('qm',qm);$('qml').value=$('qmt').value='';renderQM()}};
+renderQM();
+
+/* ================= KULLANICI ================= */
+function showUser(n){
+  const u=users[n];if(!u)return;
+  const acts=[['1 dk',1],['5 dk',5],['10 dk',10],['1 saat',60],['1 gün',1440]];
+  $('uinfo').innerHTML='<div style="font-size:16px;font-weight:700;color:'+esc(u.color)+'">'+esc(n)+'</div>'+
+  '<div class="small" style="margin:4px 0 10px">'+u.msgs.length+' mesaj • ilk görülme '+hm(u.first)+' • '+(u.badges.length?esc(u.badges.join(', ')):'rozet yok')+'</div>'+
+  '<div class="btns" style="margin-bottom:6px">'+acts.map(a=>'<button class="tm" data-k="timeout" data-m="'+a[1]+'">'+a[0]+'</button>').join('')+'</div>'+
+  '<div class="btns" style="margin-bottom:10px"><button class="bn" data-k="ban">Ban</button><button data-k="unban">Unban</button></div>'+
+  '<div class="small" style="margin-bottom:4px">Notlarım (sadece bu bilgisayarda)</div><textarea id="note" placeholder="Örn: 2 kez uyarıldı">'+esc(notes[n]||'')+'</textarea>'+
+  '<div class="small" style="margin:10px 0 4px">Mesaj geçmişi (oturum)</div><div class="hist">'+u.msgs.slice().reverse().map(m=>'<div>'+hm(m.t)+' '+esc(m.txt)+(m.flag.length?' <span class="why">'+m.flag.join(', ')+'</span>':'')+'</div>').join('')+'</div>';
+  $('note').oninput=e=>{notes[n]=e.target.value;store.set('notes',notes)};
+  $('uinfo').querySelectorAll('[data-k]').forEach(b=>b.onclick=()=>doAction(b.dataset.k,n,+b.dataset.m||0));
+}
+
+/* ================= FİLTRELER ================= */
+function renderBW(){
+  $('bwlist').innerHTML=badWords.map((w,i)=>'<span class="tag">'+esc(w)+'<i data-i="'+i+'">×</i></span>').join('')||'<span class="small">Henüz yok</span>';
+  $('bwlist').querySelectorAll('i').forEach(x=>x.onclick=()=>{badWords.splice(+x.dataset.i,1);store.set('badWords',badWords);renderBW()});
+}
+$('bwadd').onclick=()=>{const w=$('bw').value.trim().toLowerCase();if(w&&!badWords.includes(w)){badWords.push(w);store.set('badWords',badWords);renderBW()}$('bw').value=''};
+$('bw').onkeydown=e=>{if(e.key==='Enter')$('bwadd').click()};renderBW();
+
+/* ================= İSTATİSTİK + YAYIN ================= */
+function stats(){
+  const now=Math.floor(Date.now()/60000);let per=0;for(let i=0;i<1;i++)per=(mins[now]||0);
+  const last5=[0,1,2,3,4].reduce((a,i)=>a+(mins[now-i]||0),0)/5;
+  const bars=[];for(let i=14;i>=0;i--)bars.push(mins[now-i]||0);const mx=Math.max(1,...bars);
+  const svg='<svg viewBox="0 0 150 40" width="100%" height="50" preserveAspectRatio="none">'+bars.map((v,i)=>'<rect x="'+(i*10+1)+'" y="'+(40-v/mx*38)+'" width="8" height="'+(v/mx*38)+'" rx="1" fill="#53fc18"/>').join('')+'</svg>';
+  const top=Object.values(users).sort((a,b)=>b.count-a.count).slice(0,5).map(u=>'<div>'+esc(u.name)+' <span class="small">'+u.count+'</span></div>').join('')||'<span class="small">—</span>';
+  $('statbox').innerHTML='<div class="stats"><div class="stat"><b>'+total+'</b><span>mesaj</span></div><div class="stat"><b>'+Object.keys(users).length+'</b><span>benzersiz kullanıcı</span></div><div class="stat"><b>'+per+'</b><span>mesaj/dk (şimdi)</span></div><div class="stat"><b>'+last5.toFixed(1)+'</b><span>mesaj/dk (5 dk ort.)</span></div><div class="stat"><b>'+flagged+'</b><span>işaretlenen</span></div><div class="stat"><b>'+(counts.ban+counts.del)+'</b><span>mod işlemi ('+counts.ban+' ban/timeout, '+counts.del+' silme)</span></div></div>'+
+  '<h4>Son 15 dakika</h4>'+svg+'<h4>En çok yazanlar</h4>'+top;
+}
+const uptime=st=>{if(!st)return'—';const s=Math.max(0,(Date.now()-new Date(st))/1000|0),h=s/3600|0,m=(s%3600)/60|0;return h+'sa '+m+'dk'};
+function modesHtml(){
+  if(!MODES)return'<span class="small">Mod değişince burada görünür.</span>';
+  const t=(on,a,b)=>'<span class="tag '+(on?'on':'')+'">'+(on?a:b)+'</span>';
+  const sl=MODES.slow_mode||{},fo=MODES.followers_mode||{},em=MODES.emotes_mode||{},sb=MODES.subscribers_mode||{};
+  return t(sl.enabled,'Yavaş '+(sl.message_interval||'')+'s','Yavaş: kapalı')+t(fo.enabled,'Sadece takipçi','Takipçi: kapalı')+t(em.enabled,'Emote modu','Emote: kapalı')+t(sb.enabled,'Abone modu','Abone: kapalı');
+}
+function renderStream(){
+  const el=$('streambox');
+  if(!SI){el.innerHTML='<div class="small">Giriş yapıp kanala bağlanınca yayın bilgisi burada görünür.</div>';return}
+  if(SI.is_live)PEAK=Math.max(PEAK,SI.viewers||0);
+  el.innerHTML='<span class="live '+(SI.is_live?'on':'')+'">'+(SI.is_live?'● CANLI':'○ Çevrimdışı')+'</span><div class="ttl">'+esc(SI.title||'(başlık yok)')+'</div><div class="small">'+esc(SI.category||'Kategori yok')+(SI.language?' • '+esc(SI.language):'')+'</div>'+
+  '<div class="stats" style="margin-top:10px"><div class="stat"><b>'+(SI.is_live?SI.viewers:'—')+'</b><span>izleyici</span></div><div class="stat"><b>'+(SI.is_live?PEAK:'—')+'</b><span>oturum zirvesi</span></div><div class="stat" style="grid-column:span 2"><b>'+(SI.is_live?uptime(SI.start_time):'—')+'</b><span>yayın süresi</span></div></div>'+
+  '<h4>Sohbet modları</h4>'+modesHtml()+'<div class="small" style="margin-top:8px">Son güncelleme: '+hm(SI.fetched)+'</div>';
+}
+async function pollStream(){
+  const slug=$('slug').value.trim();if(!auth||!slug||!bid)return;
+  try{const c=await api('/api/channel?slug='+encodeURIComponent(slug));SI=c;SI.fetched=Date.now();renderStream()}catch(e){}
+}
+setInterval(pollStream,30000);setInterval(()=>{if(SI&&SI.is_live)renderStream()},15000);setInterval(stats,10000);
+
+/* ================= GÜNCELLEME ================= */
+let UPD=null;
+async function checkUpdate(silent){
+  try{
+    const u=await api('/api/update/check');UPD=u;$('ver').textContent='v'+u.current;
+    if(!u.configured){if(!silent)alert('Otomatik güncelleme için config.json içine "updateUrl" eklemelisin. OKU-BENI.txt dosyasında anlatılıyor.');return}
+    if(u.newer){$('upd').classList.add('pri');$('ver').textContent='v'+u.current+' → v'+u.latest+' güncelle';if(!silent)applyUpdate()}
+    else if(!silent)toast('Güncelsin (v'+u.current+')');
+  }catch(e){if(!silent)toast('Kontrol edilemedi: '+e.message)}
+}
+async function applyUpdate(){
+  if(!UPD||!UPD.newer)return;
+  if(!confirm('v'+UPD.latest+' sürümüne güncellensin mi?\n'+(UPD.notes?'\n'+UPD.notes+'\n':'')+'\nAyarların, notların ve giriş bilgin korunur.'))return;
+  try{
+    const r=await api('/api/update/apply',{});
+    if(r.updated){toast('Güncellendi, yeniden başlatılıyor…');const t=setInterval(async()=>{try{await fetch('/api/me');clearInterval(t);location.reload()}catch(e){}},1500)}
+  }catch(e){toast('Güncelleme hatası: '+e.message)}
+}
+$('upd').onclick=()=>{if(UPD&&UPD.newer)applyUpdate();else checkUpdate(false)};
+
+/* ================= BAŞLAT ================= */
+renderStream();stats();buildMenu();
+sys($('room').value?'Kayıtlı ayarlar yüklendi. Bağlan\'a basabilirsin.':'Kanal adını yaz, Bağlan\'a bas.');
+initAuth().then(()=>checkUpdate(true));
+</script>
+</body>
+</html>
