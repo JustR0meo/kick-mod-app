@@ -1,0 +1,6 @@
+{
+  "clientId": "BURAYA_CLIENT_ID",
+  "clientSecret": "BURAYA_CLIENT_SECRET",
+  "port": 3000,
+  "updateUrl": ""
+}

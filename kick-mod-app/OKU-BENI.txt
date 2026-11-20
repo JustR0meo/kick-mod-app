@@ -1,0 +1,32 @@
+KICK MOD PANELİ
+===============
+
+İLK KURULUM
+1) Node.js kur (v18+): https://nodejs.org (LTS)
+2) Kick > Ayarlar > Developer: uygulama oluştur.
+   Redirect URL (AYNEN):  http://127.0.0.1:3000/callback
+   Client ID ve Client Secret'ı kopyala. (Kick hesabında 2 adımlı doğrulama açık olmalı.)
+3) config.example.json dosyasının adını config.json yap, ID ve Secret'ı yaz. Secret'ı kimseyle paylaşma.
+4) Paneli-Baslat.bat dosyasına çift tıkla. (İlk seferde gerekli paketi kendisi kurar.)
+   Siyah pencereyi KAPATMA; panel çalıştığı sürece açık kalmalı.
+5) Panelde "Kick ile giriş yap" > kanal adını yaz > Bağlan.
+
+PANEL KULLANIMI
+- Panellerin başlığından tutup sürükle, sağ alt köşeden boyutlandır. Düzen otomatik kaydedilir.
+- Sağ üstte "Paneller" ile panelleri aç/kapat, "Düzeni sıfırla" ile varsayılana dön.
+- Mesajların sağındaki 🗑 / 1dk / 10dk / 🔨 butonları silme, timeout ve ban yapar.
+
+OTOMATİK GÜNCELLEME (bir kere kurulum)
+Uygulama güncellemeyi senin belirlediğin bir internet adresinden çeker. Ücretsiz yol GitHub:
+ a) github.com'da hesap aç, "New repository" ile PUBLIC bir repo oluştur (örn. kick-mod-app).
+ b) Repo sayfasında "Add file > Upload files" ile bu klasördeki şunları yükle:
+    server.js, package.json, version.json, public/index.html (public klasörüyle birlikte)
+    ASLA yükleme: config.json, tokens.json, node_modules
+ c) config.json'a şu satırı ekle (KULLANICI yerine kendi GitHub adın):
+    "updateUrl": "https://raw.githubusercontent.com/KULLANICI/kick-mod-app/main/"
+ d) Yeni sürüm geldiğinde bana yazarsın, ben değişen dosyaları (ve yükseltilmiş version.json'u) veririm.
+    Sen onları GitHub'da repoya yüklersin (aynı adlı dosyanın üstüne). Panelde sağ üstteki
+    "⟳" butonu "yeni sürüm" der; tıkla, panel kendini günceller ve yeniden başlar.
+ - Ayarların, notların, düzenin ve giriş bilgin güncellemede korunur. Eski dosyalar backup/ klasörüne yedeklenir.
+ - GitHub bazen değişikliği birkaç dakika geç gösterir.
+ - Güvenlik: panel, updateUrl'deki kodu bilgisayarında çalıştırır. Bu adresi sadece kendi kontrol ettiğin repoya ver.
