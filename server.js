@@ -203,6 +203,38 @@ async function getPusher(st, force) {
   return pusherCache;
 }
 
+// ---- Sohbet + olay kaydı: logs/<chatroom>.jsonl (panel kapansa da geçmiş kalır) ----
+const LOGDIR = path.join(__dirname, 'logs');
+const LOG_EVENTS = /(ChatMessageEvent|MessageDeletedEvent|UserBannedEvent|UserUnbannedEvent|SubscriptionEvent|GiftedSubscriptionsEvent|RewardRedeemedEvent)$/;
+const LOG_MAX = 15 * 1024 * 1024; // dosya 15 MB'ı geçince eski yarısı atılır
+const logSizes = new Map();
+const logFile = room => path.join(LOGDIR, String(room).replace(/\D/g, '') + '.jsonl');
+function logEvent(room, m) {
+  if (!LOG_EVENTS.test(m.event)) return;
+  const f = logFile(room);
+  const line = JSON.stringify({ t: Date.now(), e: m.event.replace(/^App\\Events\\/, ''), d: m.data }) + '\n';
+  try {
+    if (!logSizes.has(f)) { fs.mkdirSync(LOGDIR, { recursive: true }); logSizes.set(f, fs.existsSync(f) ? fs.statSync(f).size : 0); }
+    fs.appendFileSync(f, line);
+    const sz = logSizes.get(f) + Buffer.byteLength(line);
+    if (sz > LOG_MAX) { const txt = fs.readFileSync(f, 'utf8'); const keep = txt.slice(txt.indexOf('\n', txt.length / 2) + 1); fs.writeFileSync(f, keep); logSizes.set(f, Buffer.byteLength(keep)); }
+    else logSizes.set(f, sz);
+  } catch (e) { console.log('[kayıt] yazılamadı: ' + e.message); }
+}
+function readLog(room) {
+  try { return fs.readFileSync(logFile(room), 'utf8').split('\n').filter(Boolean).map(l => { try { const o = JSON.parse(l); o.d = typeof o.d === 'string' ? JSON.parse(o.d) : o.d; return o; } catch { return null; } }).filter(Boolean); }
+  catch { return []; }
+}
+// Kick'in sitede gösterdiği son mesajlar (kayıt yokken de bir miktar geçmiş görünsün)
+async function kickRecent(slug) {
+  const id = await kickChannelId(slug); if (!id) return [];
+  try {
+    const r = await fetch(`https://kick.com/api/v2/channels/${id}/messages`, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(8000) });
+    const j = await r.json(); const ms = (j && j.data && j.data.messages) || [];
+    return ms.filter(x => x && x.id && x.sender && (x.type || 'message') === 'message');
+  } catch { return []; }
+}
+
 const streams = new Map(); // room -> { ws, clients:Set, closed, info, fails, refresh }
 function emit(st, obj) { const line = 'data: ' + JSON.stringify(obj) + '\n\n'; for (const c of st.clients) c.write(line); }
 async function openUpstream(room) {
@@ -224,7 +256,7 @@ async function openUpstream(room) {
       if (d.code >= 4000 && d.code < 4100) { st.refresh = true; if (pc.source !== 'config.json') pusherCache = null; }
       emit(st, { status: 'Kick hata verdi: ' + (d.message || JSON.stringify(d)) });
     }
-    else if (m.event && !m.event.startsWith('pusher')) emit(st, { pusher: m });
+    else if (m.event && !m.event.startsWith('pusher')) { emit(st, { pusher: m }); logEvent(room, m); }
   });
   ws.on('unexpected-response', (rq, rs) => emit(st, { status: 'Kick bağlantıyı reddetti (HTTP ' + rs.statusCode + ')', down: true }));
   ws.on('error', e => emit(st, { status: 'Bağlantı hatası: ' + e.message }));
@@ -323,6 +355,25 @@ const server = http.createServer(async (req, res) => {
       if (!r.ok || !j || !j.chatroom) return send(res, 502, { error: 'Otomatik bulunamadı' });
       if (j.id) channelIds.set(slug, j.id);
       return send(res, 200, { chatroom_id: j.chatroom.id });
+    }
+
+    // Geçmiş: kayıttaki son sohbet mesajları + Kick'in son mesajları + kayıttaki moderasyon olayları
+    if (url.pathname === '/api/history') {
+      const room = url.searchParams.get('room') || '';
+      if (!/^\d{1,12}$/.test(room)) return send(res, 400, { error: 'room?' });
+      const slug = (url.searchParams.get('slug') || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+      const limit = Math.min(1000, Math.max(50, Number(url.searchParams.get('limit')) || 300));
+      const log = readLog(room);
+      const chat = new Map();
+      for (const x of await kickRecent(slug)) chat.set(String(x.id), x);
+      for (const o of log) if (o.e === 'ChatMessageEvent' && o.d && o.d.id) chat.set(String(o.d.id), o.d);
+      const msgs = [...chat.values()].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)).slice(-limit);
+      const events = log.filter(o => o.e !== 'ChatMessageEvent').slice(-3000);
+      // silinen mesajların içeriği için: silinme olayındaki mesaj ID'lerine ait metinler
+      const want = new Set(events.filter(o => o.e === 'MessageDeletedEvent').map(o => String((o.d.message && o.d.message.id) || o.d.id)));
+      const texts = {};
+      for (const o of log) if (o.e === 'ChatMessageEvent' && o.d && want.has(String(o.d.id))) texts[o.d.id] = { u: o.d.sender && o.d.sender.username, c: o.d.content };
+      return send(res, 200, { msgs, events, texts, logged: log.length });
     }
 
     // Emote listesi (kanal + Kick genel + emoji setleri); 10 dk önbellek

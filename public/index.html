@@ -39,6 +39,8 @@ label.c{color:var(--m);display:flex;gap:4px;align-items:center;font-size:13px}
 .msg.evt{border-color:var(--y);background:#ffc23320;font-weight:700}
 .msg.evt.ban{border-color:var(--r);background:#ff4d4d2e}.msg.evt.del{border-color:var(--o)}
 .msg.deleted .tx{text-decoration:line-through;opacity:.5}
+.msg.old{opacity:.75}.msg.old:hover{opacity:1}
+#bwbtn .n{background:var(--r);color:#fff;border-radius:8px;padding:0 6px;font-size:11px;margin-left:3px}
 .ts{color:var(--m);font-size:11px;margin-right:6px;font-variant-numeric:tabular-nums}
 .u{font-weight:700;cursor:pointer}.u:hover{text-decoration:underline}
 .bi{display:inline-block;width:18px;height:18px;line-height:18px;text-align:center;font-size:12px;border-radius:4px;margin-right:3px;vertical-align:-3px;background:var(--b);cursor:default;position:relative}
@@ -105,6 +107,7 @@ h4{margin:12px 0 6px;font-size:12px;text-transform:uppercase;color:var(--m);lett
   <span id="who" class="small"></span><span id="mode" class="mode">Komut kopyalama modu</span>
   <a id="login" href="/login"><button class="pri">Kick ile giriş yap</button></a><button id="logout" style="display:none">Çıkış</button>
   <span style="flex:1"></span>
+  <button id="bwbtn" title="Yasaklı kelime listesini aç">🚫 Yasaklı kelimeler<span class="n" id="bwn">0</span></button>
   <button id="menubtn">▦ Paneller</button>
   <button id="reset" title="Panelleri varsayılan yerine al">Düzeni sıfırla</button>
   <button id="upd" title="Güncellemeleri kontrol et">⟳ <span id="ver">v?</span></button>
@@ -118,7 +121,8 @@ h4{margin:12px 0 6px;font-size:12px;text-transform:uppercase;color:var(--m);lett
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const hm=d=>{const x=d?new Date(d):new Date();return isNaN(x)?'--:--':x.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})};
+const hm=d=>{const x=d?new Date(d):new Date();if(isNaN(x))return'--:--';const t=x.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+  return x.toDateString()===new Date().toDateString()?t:x.toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit'})+' '+t};
 const full=d=>{const x=d?new Date(d):new Date();return isNaN(x)?'':x.toLocaleString('tr-TR')};
 function toast(t){const e=$('toast');e.textContent=t;e.classList.add('s');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('s'),1800)}
 function copy(t){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('Kopyalandı: '+t)).catch(()=>prompt('Kopyala:',t))}
@@ -227,7 +231,9 @@ async function connect(){
   evCh=curCh();evShow=200;renderEv();
   if($('pn-player').style.display!=='none')loadPlayer();
   loadEmotes();
-  if(ws)ws.close();
+  if(ws){ws.close();ws=null}
+  $('feed').innerHTML='';msgEls={};
+  await loadHistory(room,slug);
   ws=new EventSource('/api/stream?room='+room+'&slug='+encodeURIComponent(slug)+(bid?'&bid='+bid:''));
   ws.onmessage=e=>{let x;try{x=JSON.parse(e.data)}catch(err){return}
     if(x.status){sys(x.status);if(x.down)$('dot').classList.remove('on');return}
@@ -246,7 +252,7 @@ function handlePusher(m){
     // Kick silenin adını göndermiyor: önce olaydaki alanlara bak, sonra panelden silinmiş mi, sonra AutoMod mu
     const by=(d.deleted_by&&(d.deleted_by.username||d.deleted_by.slug))||(d.deletedBy&&d.deletedBy.username)||(d.moderator&&d.moderator.username)||'';
     let byTxt=by?by:myDeletes.has(String(id))?'sen (panel)':d.aiModerated?'🤖 Kick AutoMod'+((d.violatedRules||[]).length?' ('+d.violatedRules.join(', ')+')':''):'';
-    const r=evt({type:'del',user:who,detail:info,by:byTxt||'bilinmiyor',unk:!byTxt});
+    const r=evt({eid:d.id,type:'del',user:who,detail:info,by:byTxt||'bilinmiyor',unk:!byTxt});
     setBy(r,me,byTxt||'bilinmiyor',!byTxt);
     if(!byTxt&&who)pendDel.push({u:who,t:Date.now(),r,me});
   }
@@ -254,11 +260,11 @@ function handlePusher(m){
     // ban/timeout'tan hemen önce (8 sn) aynı kişinin silinen mesajlarını bu moderatöre bağla
     if(by){const now=Date.now();pendDel=pendDel.filter(p=>{if(p.u===w&&now-p.t<8000){setBy(p.r,p.me,by+' (ban/timeout ile)');return false}return now-p.t<8000})}
     const bu=users[w];if(bu){if(d.permanent)bu.bans=(bu.bans||0)+1;else bu.timeouts=(bu.timeouts||0)+1;refreshPop(w)}
-    evt({type:d.permanent?'ban':'timeout',user:w,by:by||'',detail:d.duration&&!d.permanent?d.duration+' dk':(d.reason||'')})}
-  else if(ev==='UserUnbannedEvent'){const w=d.user&&d.user.username,by=d.unbanned_by&&d.unbanned_by.username;counts.unban++;evt({type:'unban',user:w,by:by||''})}
-  else if(ev==='SubscriptionEvent')evt({type:'sub',user:d.username,detail:d.months?d.months+' ay':''},false);
-  else if(ev==='GiftedSubscriptionsEvent'){const g=d.gifted_usernames||[];evt({type:'gift',user:d.gifter_username||'?',detail:g.length+' abonelik'+(g.length&&g.length<=5?': '+g.join(', '):'')},false)}
-  else if(ev==='RewardRedeemedEvent')evt({type:'rew',user:d.username||'?',detail:d.reward_title||''},false);
+    evt({eid:d.id,type:d.permanent?'ban':'timeout',user:w,by:by||'',detail:d.duration&&!d.permanent?d.duration+' dk':(d.reason||'')})}
+  else if(ev==='UserUnbannedEvent'){const w=d.user&&d.user.username,by=d.unbanned_by&&d.unbanned_by.username;counts.unban++;evt({eid:d.id,type:'unban',user:w,by:by||''})}
+  else if(ev==='SubscriptionEvent')evt({eid:d.id,type:'sub',user:d.username,detail:d.months?d.months+' ay':''},false);
+  else if(ev==='GiftedSubscriptionsEvent'){const g=d.gifted_usernames||[];evt({eid:d.id,type:'gift',user:d.gifter_username||'?',detail:g.length+' abonelik'+(g.length&&g.length<=5?': '+g.join(', '):'')},false)}
+  else if(ev==='RewardRedeemedEvent')evt({eid:d.id,type:'rew',user:d.username||'?',detail:d.reward_title||''},false);
   else if(ev==='ChatroomUpdatedEvent'){MODES=d;renderStream()}
 }
 function sys(t){addEl('<div class="msg sys"><span class="ts">'+hm()+'</span>'+esc(t)+'</div>')}
@@ -276,7 +282,7 @@ function evList(ch){return evCache[ch]||(evCache[ch]=evLoad(ch))}
 let evSaveT={};
 function evSave(ch){clearTimeout(evSaveT[ch]);evSaveT[ch]=setTimeout(()=>{store.set(evKey(ch),evList(ch));const chs=store.get('evChs',[]);if(!chs.includes(ch)){chs.push(ch);store.set('evChs',chs)}},500)}
 function evt(rec,feed=true){
-  const ch=curCh();rec.t=Date.now();rec.ch=ch;rec.id=rec.t.toString(36)+Math.random().toString(36).slice(2,6);
+  const ch=curCh();rec.t=rec.t||Date.now();rec.ch=ch;rec.id=rec.t.toString(36)+Math.random().toString(36).slice(2,6);
   const L=evList(ch);L.push(rec);if(L.length>EVMAX)L.splice(0,L.length-EVMAX);evSave(ch);
   if(evCh===null)evCh=ch;
   if(evCh===ch)renderEv();else renderEvChs();
@@ -349,26 +355,58 @@ function check(d,u){
 const BI={broadcaster:['🎥','Yayıncı'],moderator:['🛡️','Moderatör'],vip:['💎','VIP'],og:['👑','OG'],founder:['🏅','Kurucu'],verified:['✔️','Doğrulanmış'],staff:['🔧','Kick ekibi'],subscriber:['⭐','Abone'],sub_gifter:['🎁','Abonelik hediye eden'],sidekick:['🤝','Sidekick'],bot:['🤖','Bot']};
 const badgeHtml=bs=>bs.map(b=>{const k=b.type||'',m=BI[k]||['🏷️',k.replace(/_/g,' ')];const n=b.count?(k==='subscriber'?b.count+' ay':b.count):'';
   return '<span class="bi '+esc(k)+'" title="'+esc(m[1]+(n?' ('+n+')':''))+'">'+m[0]+(k==='subscriber'&&b.count?'<sub>'+esc(b.count)+'</sub>':'')+'</span>'}).join('');
-function onMsg(d){
-  const s=d.sender||{},name=s.username||'?';
-  const u=users[name]=users[name]||{id:s.id,name,msgs:[],last:[],badges:[],bdg:[],count:0,flags:0,color:(s.identity&&s.identity.color)||'#9fe870',first:Date.now()};
+function onMsg(d,hist){
+  if(d.id&&msgEls[d.id])return; // aynı mesaj iki kez gelmesin (geçmiş + canlı)
+  const s=d.sender||{},name=s.username||'?',mt=hist?(new Date(d.created_at).getTime()||Date.now()):Date.now();
+  const u=users[name]=users[name]||{id:s.id,name,msgs:[],last:[],badges:[],bdg:[],count:0,flags:0,color:(s.identity&&s.identity.color)||'#9fe870',first:mt};
   u.id=s.id||u.id;u.bdg=(s.identity&&s.identity.badges)||[];u.badges=u.bdg.map(b=>b.type);u.count++;
-  const reasons=check(d,u);
-  u.msgs.push({t:Date.now(),txt:d.content,flag:reasons.map(r=>r[0])});if(u.msgs.length>200)u.msgs.shift();
+  const reasons=hist?check(d,{last:[]}).filter(r=>r[1]):check(d,u);
+  u.msgs.push({t:mt,txt:d.content,flag:reasons.map(r=>r[0])});if(u.msgs.length>200)u.msgs.shift();
   u.last=[...u.last.slice(-4),(d.content||'').toLowerCase()];
-  total++;if(reasons.length){flagged++;u.flags++}
-  const mk=Math.floor(Date.now()/60000);mins[mk]=(mins[mk]||0)+1;
-  const hard=reasons.some(r=>r[1]),isMod=u.badges.includes('moderator')||u.badges.includes('broadcaster'),isVip=u.badges.includes('vip');
+  if(!hist){total++;if(reasons.length){flagged++;u.flags++}
+  const mk=Math.floor(Date.now()/60000);mins[mk]=(mins[mk]||0)+1;}  const hard=reasons.some(r=>r[1]),isMod=u.badges.includes('moderator')||u.badges.includes('broadcaster'),isVip=u.badges.includes('vip');
   let cls='';if(isMod)cls=' mod';else if(hard)cls=' alert';else if(isVip)cls=' vip';else if(reasons.length)cls=' flag';
   const txt=rich(d.content||'');
   // isimden önce: sil / 10 dk timeout / kalıcı ban
   const acts=isMod?'':'<span class="act" data-id="'+esc(d.id||'')+'" data-u="'+esc(name)+'"><b data-a="del" title="Mesajı sil">🗑</b><b data-a="t10" title="10 dakika timeout">⏱</b><b data-a="ban" title="Kalıcı ban">🔨</b></span>';
   const el=addEl('<div class="msg'+cls+'" data-flag="'+(reasons.length?1:0)+'" data-u="'+esc(name)+'"><span class="ts" title="'+full(d.created_at)+'">'+hm(d.created_at)+'</span>'+acts+badgeHtml(u.bdg)+'<span class="u" style="color:'+esc(u.color)+'" data-u="'+esc(name)+'">'+esc(name)+'</span>: <span class="tx">'+txt+'</span>'+reasons.map(r=>'<span class="why'+(r[1]?' r':'')+'">'+r[0]+'</span>').join('')+'</div>');
   if(d.id)msgEls[d.id]=el;
-  if(d._bw&&d._bw.length){markWords(el.querySelector('.tx'),d._bw);evt({type:'word',user:name,detail:(d.content||'').replace(/\[emote:\d+:([^\]]+)\]/g,':$1:').slice(0,150),by:d._bw.join(', '),unk:true},false)}
+  if(hist)el.classList.add('old');
+  if(d._bw&&d._bw.length){markWords(el.querySelector('.tx'),d._bw);if(!hist)evt({eid:"w"+d.id,type:"word",user:name,detail:(d.content||'').replace(/\[emote:\d+:([^\]]+)\]/g,':$1:').slice(0,150),by:d._bw.join(', '),unk:true},false)}
+  if(hist)return;
   if(cur===name)showUser(name);
   refreshPop(name);
   stats();
+}
+/* ---- Geçmiş: bağlanınca son sohbet mesajlarını ve kaçırılan moderasyon olaylarını yükle ---- */
+async function loadHistory(room,slug){
+  let h;try{h=await api('/api/history?room='+room+'&slug='+encodeURIComponent(slug)+'&limit=300')}catch(e){sys('Geçmiş yüklenemedi: '+e.message);return}
+  const msgs=h.msgs||[];
+  if(msgs.length){
+    sys('── Geçmiş: son '+msgs.length+' mesaj'+(h.logged?' (kayıttan + Kick)':' (Kick)')+' ──');
+    const wasPaused=$('pause').checked;$('pause').checked=false;
+    msgs.forEach(m=>{try{onMsg(m,true)}catch(e){}});
+    $('pause').checked=wasPaused;
+  }else sys('Bu kanal için henüz sohbet geçmişi yok. Bundan sonra gelen mesajlar kaydedilecek.');
+  // kayıttaki olayları etkinlik geçmişine ekle (zaten olanları atla)
+  const ch=curCh(),L=evList(ch),have=new Set(L.map(r=>r.eid).filter(Boolean));let added=0;
+  const near=(type,user,t)=>L.some(r=>!r.eid&&r.type===type&&r.user===user&&Math.abs(r.t-t)<15000);
+  (h.events||[]).forEach(o=>{const d=o.d||{};let rec=null;
+    if(o.e==='MessageDeletedEvent'){const mid=String((d.message&&d.message.id)||d.id),tx=(h.texts||{})[mid]||{};
+      rec={type:'del',user:tx.u||'',detail:(tx.c||'').replace(/\[emote:\d+:([^\]]+)\]/g,':$1:').slice(0,150),by:d.aiModerated?'🤖 Kick AutoMod':'bilinmiyor',unk:!d.aiModerated};
+      const me=msgEls[mid];if(me)me.classList.add('deleted')}
+    else if(o.e==='UserBannedEvent')rec={type:d.permanent?'ban':'timeout',user:d.user&&d.user.username,by:(d.banned_by&&d.banned_by.username)||'',detail:d.duration&&!d.permanent?d.duration+' dk':''};
+    else if(o.e==='UserUnbannedEvent')rec={type:'unban',user:d.user&&d.user.username,by:(d.unbanned_by&&d.unbanned_by.username)||''};
+    else if(o.e==='SubscriptionEvent')rec={type:'sub',user:d.username,detail:d.months?d.months+' ay':''};
+    else if(o.e==='GiftedSubscriptionsEvent')rec={type:'gift',user:d.gifter_username||'?',detail:(d.gifted_usernames||[]).length+' abonelik'};
+    else if(o.e==='RewardRedeemedEvent')rec={type:'rew',user:d.username||'?',detail:d.reward_title||''};
+    if(!rec||!d.id||have.has(d.id)||near(rec.type,rec.user,o.t))return;
+    Object.assign(rec,{eid:d.id,t:o.t,ch,id:o.t.toString(36)+Math.random().toString(36).slice(2,6)});L.push(rec);have.add(d.id);added++});
+  // ban/timeout'tan hemen önceki silmeleri o moderatöre bağla
+  if(added){L.sort((a,b)=>a.t-b.t);
+    L.forEach((r,i)=>{if(r.type==='del'&&r.unk&&r.user){const b=L.slice(i+1,i+15).find(x=>(x.type==='ban'||x.type==='timeout')&&x.user===r.user&&x.by&&x.t-r.t<8000);if(b){r.by=b.by+' (ban/timeout ile)';r.unk=false}}});
+    if(L.length>EVMAX)L.splice(0,L.length-EVMAX);evSave(ch);renderEv();sys(added+' kaçırılmış etkinlik geçmişe eklendi.')}
+  sys('── Canlı sohbet ──');stats();
 }
 // Mesaj içindeki yasaklı kelimeleri kırmızı işaretle (sadece metin kısımlarında, Türkçe harf duyarlı)
 function markWords(root,words){
@@ -594,7 +632,9 @@ $('pload').onclick=loadPlayer;$('pstop').onclick=stopPlayer;
 function renderBW(){
   $('bwlist').innerHTML=badWords.map((w,i)=>'<span class="tag">'+esc(w)+'<i data-i="'+i+'">×</i></span>').join('')||'<span class="small">Henüz yok</span>';
   $('bwlist').querySelectorAll('i').forEach(x=>x.onclick=()=>{badWords.splice(+x.dataset.i,1);store.set('badWords',badWords);renderBW()});
+  $('bwn').textContent=badWords.length;
 }
+$('bwbtn').onclick=()=>{showPanel('filters');$('bw').focus()};
 $('bwadd').onclick=()=>{const w=$('bw').value.trim().toLocaleLowerCase('tr');if(w&&!badWords.includes(w)){badWords.push(w);store.set('badWords',badWords);renderBW()}$('bw').value=''};
 $('bw').onkeydown=e=>{if(e.key==='Enter')$('bwadd').click()};renderBW();
 

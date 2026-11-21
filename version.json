@@ -1,10 +1,10 @@
 {
-  "version": "1.5.0",
+  "version": "1.6.0",
   "files": [
     "server.js",
     "public/index.html",
     "package.json",
     "version.json"
   ],
-  "notes": "Etkinlik akışı yenilendi: kanallara göre ayrı, kalıcı geçmiş, gün başlıkları, tür filtreleri, arama, CSV indirme. Yasaklı kelimeler mesajda işaretleniyor ve akışa düşüyor."
+  "notes": "Sohbet ve etkinlikler artık bilgisayara kaydediliyor; bağlanınca son mesajlar ve kaçırılan olaylar yükleniyor. Üstte Yasaklı kelimeler butonu."
 }
